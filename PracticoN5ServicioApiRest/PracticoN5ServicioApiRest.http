@@ -1,0 +1,6 @@
+@PracticoN5ServicioApiRest_HostAddress = http://localhost:5276
+
+GET {{PracticoN5ServicioApiRest_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
