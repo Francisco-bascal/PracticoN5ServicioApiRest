@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PracticoN5ServicioApiRest.Models
@@ -8,8 +9,11 @@ namespace PracticoN5ServicioApiRest.Models
         [Key]
         public int DetalleCompraId { get; set; }
         [Required]
+        [Range(1, int.MaxValue)]
         public int Cantidad { get; set; }
         [Required]
+        [Precision(18,2)]
+        [Range(0.01, double.MaxValue)]
         public decimal PrecioUnitario { get; set; }
 
         [ForeignKey(nameof(Compra))]

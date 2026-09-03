@@ -8,7 +8,9 @@ namespace PracticoN5ServicioApiRest.Models
         [Key]
         public int CategoriaId { get; set; }
         [Required]
+        [Length(3, 50)]
         public string Nombre { get; set; } = string.Empty;
+        [MaxLength(500)]
         public string? Descripcion { get; set; }
 
         [InverseProperty(nameof(Producto.Categoria))]

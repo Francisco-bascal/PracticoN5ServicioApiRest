@@ -7,11 +7,16 @@ namespace PracticoN5ServicioApiRest.Models
         [Key]
         public int ClienteId { get; set; }
         [Required]
+        [Length(2, 100)]
         public string Nombre { get; set; } = string.Empty;
+        [Length(2, 100)]
         public string? Apellido { get; set; }
+        [Length(7,20)]
         public string? Telefono { get; set; }
         [EmailAddress]
+        [MaxLength(150)]
         public string? Email { get; set; }
+        [Length(3,200)]
         public string? Direccion { get; set; }
     }
 }
