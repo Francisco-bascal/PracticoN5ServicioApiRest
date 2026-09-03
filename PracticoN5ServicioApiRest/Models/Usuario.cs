@@ -8,7 +8,7 @@ namespace PracticoN5ServicioApiRest.Models
         public int UsuarioId { get; set; }
         [Required]
         public string NombreUsuario { get; set; } = string.Empty;
-        [EmailAddress]
+        [EmailAddress, Required]
         public string Email { get; set; } = string.Empty;
         [Required]
         public string PasswordHash { get; set; } = string.Empty;

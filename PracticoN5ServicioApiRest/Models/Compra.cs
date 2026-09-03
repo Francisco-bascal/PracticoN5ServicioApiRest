@@ -15,10 +15,7 @@ namespace PracticoN5ServicioApiRest.Models
         [Required]
         public Proveedor Proveedor { get; set; } = null!;
 
-        [Required, InverseProperty(nameof(DetalleCompra.Producto))]
-        public ICollection<Producto> Productos { get; set; } = null!;
-
-        [Required, InverseProperty(nameof(DetalleCompra.Compra))]
-        public ICollection<DetalleCompra> Detalles { get; set; } = null!;
+        [InverseProperty(nameof(DetalleCompra.Compra))]
+        public ICollection<DetalleCompra> Detalles { get; set; } = new List<DetalleCompra>();
     }
 }
