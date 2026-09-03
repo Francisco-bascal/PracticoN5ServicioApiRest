@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PracticoN5ServicioApiRest.Models
 {
@@ -16,5 +17,8 @@ namespace PracticoN5ServicioApiRest.Models
         public string? Email { get; set; }
         [Length(3, 200)]
         public string? Direccion { get; set; }
+
+        [InverseProperty(nameof(Compra.Proveedor))]
+        public ICollection<Compra> Compras { get; set; } = new List<Compra>();
     }
 }

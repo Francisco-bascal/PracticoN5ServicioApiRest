@@ -20,6 +20,14 @@ namespace PracticoN5ServicioApiRest.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            //1:N Categoría-Productos
+            modelBuilder.Entity<Producto>(e => 
+                e.HasOne(c => c.Categoria)
+                .WithMany(c => c.Productos)
+                .HasForeignKey(p => p.CategoriaId)
+                .OnDelete(DeleteBehavior.Restrict)
+            );
         }
     }
 }
