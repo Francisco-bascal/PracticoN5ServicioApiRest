@@ -44,6 +44,38 @@ namespace PracticoN5ServicioApiRest.Data
                 .HasForeignKey(v => v.ClienteId)
                 .OnDelete(DeleteBehavior.Restrict)
             );
+
+            //1:N Producto-DetalleCompra
+            modelBuilder.Entity<DetalleCompra>(e => 
+                e.HasOne(d => d.Producto)
+                .WithMany()
+                .HasForeignKey(d => d.ProductoId)
+                .OnDelete(DeleteBehavior.Restrict)
+            );
+
+            //1:N Producto-DetalleVenta
+            modelBuilder.Entity<DetalleVenta>(e => 
+                e.HasOne(d => d.Producto)
+                .WithMany()
+                .HasForeignKey(d => d.ProductoId)
+                .OnDelete(DeleteBehavior.Restrict)
+            );
+
+            //1:N Compra-DetalleCompra
+            modelBuilder.Entity<DetalleCompra>(e => 
+                e.HasOne(d => d.Compra)
+                .WithMany(c => c.Detalles)
+                .HasForeignKey(d => d.CompraId)
+                .OnDelete(DeleteBehavior.Restrict)
+            );
+
+            //1:N Venta-DetalleVenta
+            modelBuilder.Entity<DetalleVenta>(e => 
+                e.HasOne(d => d.Venta)
+                .WithMany(v => v.Detalles)
+                .HasForeignKey(d => d.VentaId)
+                .OnDelete(DeleteBehavior.Restrict)
+            );
         }
     }
 }
