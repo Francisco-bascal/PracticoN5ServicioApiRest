@@ -19,5 +19,3 @@ namespace PracticoN5ServicioApiRest.Models
         public ICollection<DetalleVenta> Detalles { get; set; } = new List<DetalleVenta>();
     }
 }
-
-//Verificar este modelado

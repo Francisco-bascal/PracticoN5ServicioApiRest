@@ -1,5 +1,6 @@
 using PracticoN5ServicioApiRest.Models;
 using PracticoN5ServicioApiRest.Data;
+using PracticoN5ServicioApiRest.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +14,17 @@ builder.Services.AddSwaggerGen();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new Exception("Database connection not found");
 builder.Services.AddDbContext<SistemaVentasDbContext>(options => options.UseSqlServer(connectionString));
+
+// Registrar servicios de la capa de negocio
+builder.Services.AddScoped<CategoriasService>();
+builder.Services.AddScoped<ProductosService>();
+builder.Services.AddScoped<ClientesService>();
+builder.Services.AddScoped<ProveedoresService>();
+builder.Services.AddScoped<UsuariosService>();
+builder.Services.AddScoped<ComprasService>();
+builder.Services.AddScoped<DetallesCompraService>();
+builder.Services.AddScoped<VentasService>();
+builder.Services.AddScoped<DetallesVentaService>();
 
 var app = builder.Build();
 
