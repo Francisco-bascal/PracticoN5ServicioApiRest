@@ -66,7 +66,6 @@ namespace PracticoN5ServicioApiRest.Services
 
             var token = new JwtSecurityToken(
                 issuer: _configuracion["Jwt:Issuer"],
-                audience: _configuracion["Jwt:Audience"],
                 claims: claims,
                 expires: DateTime.UtcNow.AddHours(1),
                 signingCredentials: credentials);
