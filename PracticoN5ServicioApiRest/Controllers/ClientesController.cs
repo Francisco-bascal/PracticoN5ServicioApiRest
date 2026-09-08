@@ -1,0 +1,106 @@
+using Microsoft.AspNetCore.Mvc;
+using PracticoN5ServicioApiRest.Models;
+using PracticoN5ServicioApiRest.Services;
+
+namespace PracticoN5ServicioApiRest.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class ClientesController : ControllerBase
+    {
+        private readonly ClientesService _servicio;
+
+        public ClientesController(ClientesService servicio)
+        {
+            _servicio = servicio;
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ObtenerTodos(CancellationToken cancellationToken = default)
+        {
+            var clientes = await _servicio.ObtenerTodosAsync(cancellationToken);
+            return Ok(clientes);
+        }
+
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> ObtenerPorId(
+            int id, 
+            [FromQuery] bool incluirVentas = false, 
+            CancellationToken cancellationToken = default)
+        {
+            var cliente = await _servicio.ObtenerPorIdAsync(id, incluirVentas, cancellationToken);
+            if (cliente == null)
+            {
+                return NotFound($"No se encontró el cliente con ID {id}.");
+            }
+
+            return Ok(cliente);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Crear(
+            [FromBody] Cliente cliente, 
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var clienteCreado = await _servicio.CrearAsync(cliente, cancellationToken);
+                return CreatedAtAction(
+                    nameof(ObtenerPorId), 
+                    new { id = clienteCreado.ClienteId }, 
+                    clienteCreado);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(ex.Message);
+            }
+        }
+
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> Actualizar(
+            int id, 
+            [FromBody] Cliente cliente, 
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var clienteActualizado = await _servicio.ActualizarAsync(id, cliente, cancellationToken);
+                return Ok(clienteActualizado);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(ex.Message);
+            }
+        }
+
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> Eliminar(int id, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await _servicio.EliminarAsync(id, cancellationToken);
+                return NoContent();
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(ex.Message);
+            }
+        }
+    }
+}

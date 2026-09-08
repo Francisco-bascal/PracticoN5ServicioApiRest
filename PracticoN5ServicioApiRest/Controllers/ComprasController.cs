@@ -1,0 +1,91 @@
+using Microsoft.AspNetCore.Mvc;
+using PracticoN5ServicioApiRest.Models;
+using PracticoN5ServicioApiRest.Services;
+
+namespace PracticoN5ServicioApiRest.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class ComprasController : ControllerBase
+    {
+        private readonly ComprasService _servicio;
+
+        public ComprasController(ComprasService servicio)
+        {
+            _servicio = servicio;
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ObtenerTodos(CancellationToken cancellationToken = default)
+        {
+            var compras = await _servicio.ObtenerTodosAsync(cancellationToken);
+            return Ok(compras);
+        }
+
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> ObtenerPorId(int id, CancellationToken cancellationToken = default)
+        {
+            var compra = await _servicio.ObtenerPorIdAsync(id, cancellationToken);
+            if (compra == null)
+            {
+                return NotFound($"No se encontró la compra con ID {id}.");
+            }
+
+            return Ok(compra);
+        }
+
+        [HttpGet("proveedor/{proveedorId:int}")]
+        public async Task<IActionResult> ObtenerPorProveedor(
+            int proveedorId, 
+            CancellationToken cancellationToken = default)
+        {
+            var compras = await _servicio.ObtenerPorProveedorAsync(proveedorId, cancellationToken);
+            return Ok(compras);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Registrar(
+            [FromBody] Compra compra, 
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var compraRegistrada = await _servicio.RegistrarCompraAsync(compra, cancellationToken);
+                return CreatedAtAction(
+                    nameof(ObtenerPorId), 
+                    new { id = compraRegistrada.CompraId }, 
+                    compraRegistrada);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPost("{id:int}/anular")]
+        public async Task<IActionResult> Anular(int id, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await _servicio.AnularCompraAsync(id, cancellationToken);
+                return Ok("Compra anulada exitosamente y stock revertido.");
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(ex.Message);
+            }
+        }
+    }
+}
