@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using PracticoN5ServicioApiRest.Models;
 using PracticoN5ServicioApiRest.Services;
+using PracticoN5ServicioApiRest.DTOs;
 
 namespace PracticoN5ServicioApiRest.Controllers
 {
@@ -14,6 +17,27 @@ namespace PracticoN5ServicioApiRest.Controllers
         {
             _servicio = servicio;
         }
+
+        [AllowAnonymous]
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequestDTO request, CancellationToken cancellationToken = default)
+        {
+            var token = await _servicio.LoginAsync(
+                request.NombreUsuario,
+                request.Password,
+                cancellationToken);
+
+            if (token == null)
+            {
+                return Unauthorized("Nombre de usuario o contraseña incorrectos.");
+            }
+
+            return Ok(new LoginResponseDTO
+            {
+                Token = token
+            });
+        }
+
 
         [HttpGet]
         public async Task<IActionResult> ObtenerTodos(CancellationToken cancellationToken = default)

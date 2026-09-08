@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PracticoN5ServicioApiRest.Data;
+using PracticoN5ServicioApiRest.DTOs;
 using PracticoN5ServicioApiRest.Models;
 
 namespace PracticoN5ServicioApiRest.Services
@@ -13,18 +14,55 @@ namespace PracticoN5ServicioApiRest.Services
             _contexto = contexto;
         }
 
-        public async Task<ICollection<Producto>> ObtenerTodosAsync(CancellationToken cancellationToken = default)
+        public async Task<ResultadoPaginadoDto<Producto>> ObtenerTodosAsync(
+            int pagina = 1, 
+            int tamanoPagina = 10, 
+            CancellationToken cancellationToken = default)
+        {
+            if (pagina <= 0)
+            {
+                throw new ArgumentException("El número de página debe ser mayor o igual a 1.", nameof(pagina));
+            }
+
+            if (tamanoPagina <= 0)
+            {
+                throw new ArgumentException("El tamaño de página debe ser mayor a 0.", nameof(tamanoPagina));
+            }
+
+            if (tamanoPagina > 100)
+            {
+                throw new ArgumentException("El tamaño de página no puede superar el límite máximo de 100 elementos.", nameof(tamanoPagina));
+            }
+
+            var consulta = _contexto.Productos
+                .AsNoTracking()
+                .Include(p => p.Categoria);
+
+            int totalElementos = await consulta.CountAsync(cancellationToken);
+            int totalPaginas = (int)Math.Ceiling(totalElementos / (double)tamanoPagina);
+
+            var elementos = await consulta
+                .Skip((pagina - 1) * tamanoPagina)
+                .Take(tamanoPagina)
+                .ToListAsync(cancellationToken);
+
+            return new ResultadoPaginadoDto<Producto>
+            {
+                PaginaActual = pagina,
+                TamanoPagina = tamanoPagina,
+                TotalElementos = totalElementos,
+                TotalPaginas = totalPaginas,
+                Elementos = elementos
+            };
+        }
+
+        // Método de compatibilidad para consultas completas
+        public async Task<ICollection<Producto>> GetProductosAsync(CancellationToken cancellationToken = default)
         {
             return await _contexto.Productos
                 .AsNoTracking()
                 .Include(p => p.Categoria)
                 .ToListAsync(cancellationToken);
-        }
-
-        // Método de compatibilidad para el controlador existente
-        public async Task<ICollection<Producto>> GetProductosAsync()
-        {
-            return await ObtenerTodosAsync();
         }
 
         public async Task<Producto?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default)

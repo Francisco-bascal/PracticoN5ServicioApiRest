@@ -16,10 +16,20 @@ namespace PracticoN5ServicioApiRest.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Index(CancellationToken cancellationToken = default)
+        public async Task<IActionResult> Index(
+            [FromQuery] int pagina = 1, 
+            [FromQuery] int tamanoPagina = 10, 
+            CancellationToken cancellationToken = default)
         {
-            var productos = await _servicio.ObtenerTodosAsync(cancellationToken);
-            return Ok(productos);
+            try
+            {
+                var productos = await _servicio.ObtenerTodosAsync(pagina, tamanoPagina, cancellationToken);
+                return Ok(productos);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         [HttpGet("{id:int}")]

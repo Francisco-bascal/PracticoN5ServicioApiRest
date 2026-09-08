@@ -16,10 +16,20 @@ namespace PracticoN5ServicioApiRest.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> ObtenerTodos(CancellationToken cancellationToken = default)
+        public async Task<IActionResult> ObtenerTodos(
+            [FromQuery] int pagina = 1, 
+            [FromQuery] int tamanoPagina = 10, 
+            CancellationToken cancellationToken = default)
         {
-            var proveedores = await _servicio.ObtenerTodosAsync(cancellationToken);
-            return Ok(proveedores);
+            try
+            {
+                var proveedores = await _servicio.ObtenerTodosAsync(pagina, tamanoPagina, cancellationToken);
+                return Ok(proveedores);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         [HttpGet("{id:int}")]
