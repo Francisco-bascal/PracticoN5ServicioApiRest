@@ -73,6 +73,9 @@ app.UseCors("Permissive");
 app.UseAuthentication();
 app.UseAuthorization();
 
+//Para que redireccione a swagger
+app.MapGet("/", () => Results.Redirect("/swagger"));
+
 app.MapControllers();
 
 app.Run();

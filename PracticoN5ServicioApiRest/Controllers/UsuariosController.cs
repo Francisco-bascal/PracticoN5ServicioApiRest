@@ -18,6 +18,13 @@ namespace PracticoN5ServicioApiRest.Controllers
             _servicio = servicio;
         }
 
+        [HttpGet("test")]
+        [AllowAnonymous]
+        public IActionResult Test()
+        {
+            return Ok("API funcionando");
+        }
+
         [AllowAnonymous]
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequestDTO request, CancellationToken cancellationToken = default)
