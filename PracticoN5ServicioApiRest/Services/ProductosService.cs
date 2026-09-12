@@ -82,7 +82,7 @@ namespace PracticoN5ServicioApiRest.Services
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<Producto> CrearAsync(CreateProductoDTO productoDto, CancellationToken cancellationToken = default)
+        public async Task<ResponseProductoDTO> CrearAsync(CreateProductoDTO productoDto, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(productoDto.Nombre))
             {
@@ -126,7 +126,16 @@ namespace PracticoN5ServicioApiRest.Services
                 .Reference(p => p.Categoria)
                 .LoadAsync(cancellationToken);
 
-            return producto;
+            return new ResponseProductoDTO 
+            {
+                ProductoId = producto.ProductoId,
+                Nombre = producto.Nombre,
+                Descripcion = producto.Descripcion,
+                Precio = producto.Precio, 
+                Stock = producto.Stock,
+                ImagenRuta = producto.ImagenRuta,
+                CategoriaId = producto.CategoriaId
+            };
         }
 
         public async Task<Producto> ActualizarAsync(
