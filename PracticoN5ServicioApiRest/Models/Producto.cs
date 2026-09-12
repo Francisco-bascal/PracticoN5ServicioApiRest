@@ -25,7 +25,6 @@ namespace PracticoN5ServicioApiRest.Models
 
         [ForeignKey(nameof(Categoria))]
         public int CategoriaId { get; set; }
-        [Required]
         public virtual CategoriaProducto Categoria { get; set; } = null!;
     }
 }
