@@ -9,10 +9,9 @@ namespace PracticoN5ServicioApiRest.Models
         public int CompraId { get; set; }
         [Required]
         public DateTime Fecha { get; set; }
-
+        [Required]
         [ForeignKey(nameof(Proveedor))]
         public int ProveedorId { get; set; }
-        [Required]
         public Proveedor Proveedor { get; set; } = null!;
 
         [InverseProperty(nameof(DetalleCompra.Compra))]

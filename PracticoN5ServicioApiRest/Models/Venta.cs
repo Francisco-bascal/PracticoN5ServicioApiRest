@@ -9,10 +9,10 @@ namespace PracticoN5ServicioApiRest.Models
         public int VentaId { get; set; }
         [Required]
         public DateTime Fecha { get; set; }
-
+        
+        [Required]
         [ForeignKey(nameof(Cliente))]
         public int ClienteId { get; set; }
-        [Required]
         public Cliente Cliente { get; set; } = null!;
 
         [InverseProperty(nameof(DetalleVenta.Venta))]
