@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PracticoN5ServicioApiRest.DTOs;
 using PracticoN5ServicioApiRest.Models;
 using PracticoN5ServicioApiRest.Services;
 
@@ -57,7 +58,7 @@ namespace PracticoN5ServicioApiRest.Controllers
 
         [HttpPost]
         public async Task<IActionResult> Registrar(
-            [FromBody] Venta venta, 
+            [FromBody] CreateVentaDTO venta, 
             CancellationToken cancellationToken = default)
         {
             try

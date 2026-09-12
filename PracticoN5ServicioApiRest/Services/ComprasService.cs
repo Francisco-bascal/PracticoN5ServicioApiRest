@@ -81,64 +81,79 @@ namespace PracticoN5ServicioApiRest.Services
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<Compra> RegistrarCompraAsync(
-            Compra compra, 
-            CancellationToken cancellationToken = default)
+        public async Task<Compra> RegistrarCompraAsync(CreateCompraDTO compraDto, CancellationToken cancellationToken = default)
         {
-            if (compra.Detalles == null || !compra.Detalles.Any())
+            if (compraDto.Detalles == null || !compraDto.Detalles.Any())
             {
-                throw new InvalidOperationException("La compra debe incluir al menos una línea de detalle con un producto.");
+                throw new InvalidOperationException(
+                    "La compra debe incluir al menos una línea de detalle con un producto.");
             }
 
             bool proveedorExiste = await _contexto.Proveedores
-                .AnyAsync(p => p.ProveedorId == compra.ProveedorId, cancellationToken);
+                .AnyAsync(
+                    p => p.ProveedorId == compraDto.ProveedorId,
+                    cancellationToken);
 
             if (!proveedorExiste)
             {
-                throw new InvalidOperationException($"El proveedor con ID {compra.ProveedorId} no existe.");
+                throw new InvalidOperationException(
+                    $"El proveedor con ID {compraDto.ProveedorId} no existe.");
             }
 
-            await using var transaccion = await _contexto.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaccion =
+                await _contexto.Database.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                if (compra.Fecha == default)
+                var compra = new Compra
                 {
-                    compra.Fecha = DateTime.UtcNow;
-                }
+                    Fecha = compraDto.Fecha == default
+                        ? DateTime.UtcNow
+                        : compraDto.Fecha,
 
-                compra.Proveedor = null!;
+                    ProveedorId = compraDto.ProveedorId
+                };
 
-                foreach (var detalle in compra.Detalles)
+                foreach (var detalleDto in compraDto.Detalles)
                 {
-                    if (detalle.Cantidad <= 0)
+                    if (detalleDto.Cantidad <= 0)
                     {
-                        throw new ArgumentException($"La cantidad para el producto ID {detalle.ProductoId} debe ser mayor a cero.");
+                        throw new ArgumentException(
+                            $"La cantidad para el producto ID {detalleDto.ProductoId} debe ser mayor a cero.");
                     }
 
-                    if (detalle.PrecioUnitario <= 0)
+                    if (detalleDto.PrecioUnitario <= 0)
                     {
-                        throw new ArgumentException($"El precio unitario para el producto ID {detalle.ProductoId} debe ser mayor a cero.");
+                        throw new ArgumentException(
+                            $"El precio unitario para el producto ID {detalleDto.ProductoId} debe ser mayor a cero.");
                     }
 
                     var producto = await _contexto.Productos
-                        .FirstOrDefaultAsync(p => p.ProductoId == detalle.ProductoId, cancellationToken);
+                        .FirstOrDefaultAsync(
+                            p => p.ProductoId == detalleDto.ProductoId,
+                            cancellationToken);
 
                     if (producto == null)
                     {
-                        throw new KeyNotFoundException($"No se encontró el producto con ID {detalle.ProductoId} para asociar al detalle de compra.");
+                        throw new KeyNotFoundException(
+                            $"No se encontró el producto con ID {detalleDto.ProductoId} para asociar al detalle de compra.");
                     }
 
-                    // Aumentar stock del producto con la compra
-                    producto.Stock += detalle.Cantidad;
+                    //Lógica de adición de stock
+                    producto.Stock += detalleDto.Cantidad;
 
-                    detalle.Producto = null!;
-                    detalle.Compra = null!;
+                    var detalle = new DetalleCompra
+                    {
+                        ProductoId = detalleDto.ProductoId,
+                        Cantidad = detalleDto.Cantidad,
+                        PrecioUnitario = detalleDto.PrecioUnitario
+                    };
+
+                    compra.Detalles.Add(detalle);
                 }
 
-                _contexto.Compras.Add(compra);
+                await _contexto.Compras.AddAsync(compra, cancellationToken);
                 await _contexto.SaveChangesAsync(cancellationToken);
-
                 await transaccion.CommitAsync(cancellationToken);
 
                 // Cargar datos relacionados para la respuesta

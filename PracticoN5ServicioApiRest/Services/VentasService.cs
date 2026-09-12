@@ -81,70 +81,80 @@ namespace PracticoN5ServicioApiRest.Services
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<Venta> RegistrarVentaAsync(
-            Venta venta, 
-            CancellationToken cancellationToken = default)
+        public async Task<Venta> RegistrarVentaAsync(CreateVentaDTO ventaDto, CancellationToken cancellationToken = default)
         {
-            if (venta.Detalles == null || !venta.Detalles.Any())
+            if (ventaDto.Detalles == null || !ventaDto.Detalles.Any())
             {
                 throw new InvalidOperationException("La venta debe contener al menos un producto en sus detalles.");
             }
 
             bool clienteExiste = await _contexto.Clientes
-                .AnyAsync(c => c.ClienteId == venta.ClienteId, cancellationToken);
+                .AnyAsync(c => c.ClienteId == ventaDto.ClienteId, cancellationToken);
 
             if (!clienteExiste)
             {
-                throw new InvalidOperationException($"El cliente con ID {venta.ClienteId} no existe.");
+                throw new InvalidOperationException($"El cliente con ID {ventaDto.ClienteId} no existe.");
             }
 
-            await using var transaccion = await _contexto.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaccion =
+                await _contexto.Database.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                if (venta.Fecha == default)
+                var venta = new Venta
                 {
-                    venta.Fecha = DateTime.UtcNow;
-                }
+                    Fecha = ventaDto.Fecha == default
+                        ? DateTime.UtcNow
+                        : ventaDto.Fecha,
 
-                venta.Cliente = null!;
+                    ClienteId = ventaDto.ClienteId
+                };
 
-                foreach (var detalle in venta.Detalles)
+                foreach (var detalleDto in ventaDto.Detalles)
                 {
-                    if (detalle.Cantidad <= 0)
+                    if (detalleDto.Cantidad <= 0)
                     {
-                        throw new ArgumentException($"La cantidad para el producto ID {detalle.ProductoId} debe ser mayor a cero.");
+                        throw new ArgumentException(
+                            $"La cantidad para el producto ID {detalleDto.ProductoId} debe ser mayor a cero.");
                     }
 
-                    if (detalle.PrecioUnitario <= 0)
+                    if (detalleDto.PrecioUnitario <= 0)
                     {
-                        throw new ArgumentException($"El precio unitario para el producto ID {detalle.ProductoId} debe ser mayor a cero.");
+                        throw new ArgumentException(
+                            $"El precio unitario para el producto ID {detalleDto.ProductoId} debe ser mayor a cero.");
                     }
 
                     var producto = await _contexto.Productos
-                        .FirstOrDefaultAsync(p => p.ProductoId == detalle.ProductoId, cancellationToken);
+                        .FirstOrDefaultAsync(p => p.ProductoId == detalleDto.ProductoId, cancellationToken);
 
                     if (producto == null)
                     {
-                        throw new KeyNotFoundException($"No se encontró el producto con ID {detalle.ProductoId}.");
+                        throw new KeyNotFoundException($"No se encontró el producto con ID {detalleDto.ProductoId}.");
                     }
 
-                    // Validación crítica de inventario
-                    if (producto.Stock < detalle.Cantidad)
+                    if (producto.Stock < detalleDto.Cantidad)
                     {
-                        throw new InvalidOperationException($"Stock insuficiente para el producto '{producto.Nombre}'. Stock disponible: {producto.Stock}, Solicitado: {detalle.Cantidad}.");
+                        throw new InvalidOperationException(
+                            $"Stock insuficiente para el producto '{producto.Nombre}'. " +
+                            $"Stock disponible: {producto.Stock}, " +
+                            $"Solicitado: {detalleDto.Cantidad}.");
                     }
 
-                    // Decremento de stock por venta
-                    producto.Stock -= detalle.Cantidad;
+                    //Lógica de ajuste de cantidad en stock
+                    producto.Stock -= detalleDto.Cantidad;
 
-                    detalle.Producto = null!;
-                    detalle.Venta = null!;
+                    var detalle = new DetalleVenta
+                    {
+                        ProductoId = detalleDto.ProductoId,
+                        Cantidad = detalleDto.Cantidad,
+                        PrecioUnitario = detalleDto.PrecioUnitario
+                    };
+
+                    venta.Detalles.Add(detalle);
                 }
 
-                _contexto.Ventas.Add(venta);
+                await _contexto.Ventas.AddAsync(venta, cancellationToken);
                 await _contexto.SaveChangesAsync(cancellationToken);
-
                 await transaccion.CommitAsync(cancellationToken);
 
                 // Cargar datos relacionados para la respuesta
