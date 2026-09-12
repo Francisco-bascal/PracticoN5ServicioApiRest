@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PracticoN5ServicioApiRest.DTOs;
 using PracticoN5ServicioApiRest.Models;
 using PracticoN5ServicioApiRest.Services;
 
@@ -54,9 +55,7 @@ namespace PracticoN5ServicioApiRest.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Crear(
-            [FromBody] Producto producto, 
-            CancellationToken cancellationToken = default)
+        public async Task<IActionResult> Crear([FromBody] CreateProductoDTO producto, CancellationToken cancellationToken = default)
         {
             try
             {

@@ -82,35 +82,43 @@ namespace PracticoN5ServicioApiRest.Services
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<Producto> CrearAsync(Producto producto, CancellationToken cancellationToken = default)
+        public async Task<Producto> CrearAsync(CreateProductoDTO productoDto, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(producto.Nombre))
+            if (string.IsNullOrWhiteSpace(productoDto.Nombre))
             {
-                throw new ArgumentException("El nombre del producto es obligatorio.", nameof(producto));
+                throw new ArgumentException("El nombre del producto es obligatorio.", nameof(productoDto));
             }
 
-            if (producto.Precio < 0)
+            if (productoDto.Precio < 0)
             {
-                throw new ArgumentException("El precio del producto no puede ser negativo.", nameof(producto));
+                throw new ArgumentException("El precio del producto no puede ser negativo.", nameof(productoDto));
             }
 
-            if (producto.Stock < 0)
+            if (productoDto.Stock < 0)
             {
-                throw new ArgumentException("El stock inicial no puede ser negativo.", nameof(producto));
+                throw new ArgumentException("El stock inicial no puede ser negativo.", nameof(productoDto));
             }
 
             bool categoriaExiste = await _contexto.Categorias
-                .AnyAsync(c => c.CategoriaId == producto.CategoriaId, cancellationToken);
+                .AnyAsync(c => c.CategoriaId == productoDto.CategoriaId, cancellationToken);
 
             if (!categoriaExiste)
             {
-                throw new InvalidOperationException($"La categoría con ID {producto.CategoriaId} no existe.");
+                throw new InvalidOperationException($"La categoría con ID {productoDto.CategoriaId} no existe.");
             }
 
-            // Evitar que EF Core intente recrear la entidad de navegación
-            producto.Categoria = null!;
+            //Mapeo de DTO a Modelo
+            var producto = new Producto
+            {
+                Nombre = productoDto.Nombre,
+                Descripcion = productoDto.Descripcion,
+                Precio = productoDto.Precio,
+                Stock = productoDto.Stock,
+                ImagenRuta = productoDto.ImagenRuta,
+                CategoriaId = productoDto.CategoriaId
+            };
 
-            _contexto.Productos.Add(producto);
+            await _contexto.Productos.AddAsync(producto, cancellationToken);
             await _contexto.SaveChangesAsync(cancellationToken);
 
             // Cargar datos de la categoría para el retorno completo
