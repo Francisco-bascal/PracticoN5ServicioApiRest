@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PracticoN5ServicioApiRest.Services;
 
@@ -5,6 +6,7 @@ namespace PracticoN5ServicioApiRest.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class DetallesCompraController : ControllerBase
     {
         private readonly DetallesCompraService _servicio;

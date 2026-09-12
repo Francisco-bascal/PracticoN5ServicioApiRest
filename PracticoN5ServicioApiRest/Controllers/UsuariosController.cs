@@ -45,7 +45,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             });
         }
 
-
+        [Authorize]
         [HttpGet]
         public async Task<IActionResult> ObtenerTodos(CancellationToken cancellationToken = default)
         {
@@ -53,6 +53,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             return Ok(usuarios);
         }
 
+        [Authorize]
         [HttpGet("{id:int}")]
         public async Task<IActionResult> ObtenerPorId(int id, CancellationToken cancellationToken = default)
         {
@@ -65,6 +66,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             return Ok(usuario);
         }
 
+        [Authorize]
         [HttpGet("usuario/{nombreUsuario}")]
         public async Task<IActionResult> ObtenerPorNombreUsuario(
             string nombreUsuario, 
@@ -79,6 +81,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             return Ok(usuario);
         }
 
+        [Authorize]
         [HttpPost]
         public async Task<IActionResult> Crear(
             [FromBody] Usuario usuario, 
@@ -102,6 +105,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
+        [Authorize]
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Actualizar(
             int id, 
@@ -127,6 +131,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
+        [Authorize]
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Eliminar(int id, CancellationToken cancellationToken = default)
         {

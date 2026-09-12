@@ -43,17 +43,9 @@ namespace PracticoN5ServicioApiRest.Services
 
             var claims = new[]
             {
-                new Claim(
-                    ClaimTypes.NameIdentifier,
-                    usuario.UsuarioId.ToString()),
-
-                new Claim(
-                    ClaimTypes.Name,
-                    usuario.NombreUsuario),
-
-                new Claim(
-                    ClaimTypes.Role,
-                    usuario.Rol)
+                new Claim(ClaimTypes.NameIdentifier, usuario.UsuarioId.ToString()),
+                new Claim(ClaimTypes.Name, usuario.NombreUsuario),
+                new Claim(ClaimTypes.Role, usuario.Rol)
             };
 
             var key = new SymmetricSecurityKey(
