@@ -208,6 +208,7 @@ namespace PracticoN5ServicioApiRest.Services
                     }
                 }
 
+                //Primero se eliminan los detalles para luego poder eliminar la compra
                 _contexto.DetallesCompra.RemoveRange(compra.Detalles);
                 _contexto.Compras.Remove(compra);
 

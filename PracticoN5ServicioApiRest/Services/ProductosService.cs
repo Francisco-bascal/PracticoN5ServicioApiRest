@@ -138,10 +138,7 @@ namespace PracticoN5ServicioApiRest.Services
             };
         }
 
-        public async Task<Producto> ActualizarAsync(
-            int id, 
-            Producto productoActualizado, 
-            CancellationToken cancellationToken = default)
+        public async Task<ResponseProductoDTO> ActualizarAsync(int id, Producto productoActualizado, CancellationToken cancellationToken = default)
         {
             var productoExistente = await _contexto.Productos
                 .FirstOrDefaultAsync(p => p.ProductoId == id, cancellationToken);
@@ -190,7 +187,16 @@ namespace PracticoN5ServicioApiRest.Services
                 .Reference(p => p.Categoria)
                 .LoadAsync(cancellationToken);
 
-            return productoExistente;
+            return new ResponseProductoDTO 
+            {
+                ProductoId = productoExistente.ProductoId,
+                Nombre = productoExistente.Nombre,
+                Descripcion = productoExistente.Descripcion,
+                Precio = productoExistente.Precio,
+                Stock = productoExistente.Stock,
+                ImagenRuta = productoExistente.ImagenRuta,
+                CategoriaId = productoExistente.CategoriaId
+            };
         }
 
         public async Task<bool> ActualizarStockAsync(
