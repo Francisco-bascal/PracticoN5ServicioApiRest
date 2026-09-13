@@ -76,10 +76,7 @@ namespace PracticoN5ServicioApiRest.Controllers
         }
 
         [HttpPut("{id:int}")]
-        public async Task<IActionResult> Actualizar(
-            int id, 
-            [FromBody] Producto producto, 
-            CancellationToken cancellationToken = default)
+        public async Task<IActionResult> Actualizar(int id, [FromBody] CreateProductoDTO producto, CancellationToken cancellationToken = default)
         {
             try
             {
