@@ -138,7 +138,7 @@ namespace PracticoN5ServicioApiRest.Services
             };
         }
 
-        public async Task<ResponseProductoDTO> ActualizarAsync(int id, Producto productoActualizado, CancellationToken cancellationToken = default)
+        public async Task<ResponseProductoDTO> ActualizarAsync(int id, CreateProductoDTO productoActualizado, CancellationToken cancellationToken = default)
         {
             var productoExistente = await _contexto.Productos
                 .FirstOrDefaultAsync(p => p.ProductoId == id, cancellationToken);
