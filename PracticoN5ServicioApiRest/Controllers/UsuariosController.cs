@@ -7,6 +7,7 @@ using PracticoN5ServicioApiRest.DTOs;
 
 namespace PracticoN5ServicioApiRest.Controllers
 {
+// "test" y "login" son públicas ([AllowAnonymous]); el resto exige token JWT válido.
     [ApiController]
     [Route("api/[controller]")]
     public class UsuariosController : ControllerBase
@@ -27,6 +28,7 @@ namespace PracticoN5ServicioApiRest.Controllers
 
         [AllowAnonymous]
         [HttpPost("login")]
+        /// <summary>Autentica credenciales y devuelve el token JWT a usar como Bearer en los [Authorize].</summary>
         public async Task<IActionResult> Login([FromBody] LoginRequestDTO request, CancellationToken cancellationToken = default)
         {
             var token = await _servicio.LoginAsync(
@@ -34,6 +36,7 @@ namespace PracticoN5ServicioApiRest.Controllers
                 request.Password,
                 cancellationToken);
 
+            // null = credenciales inválidas (usuario inexistente o contraseña incorrecta) -> 401.
             if (token == null)
             {
                 return Unauthorized("Nombre de usuario o contraseña incorrectos.");

@@ -22,8 +22,13 @@ namespace PracticoN5ServicioApiRest.Services
             _passwordHasher = new PasswordHasher<Usuario>();
         }
 
+/// <summary>Valida las credenciales y, si son correctas, genera el token JWT firmado y expirado a 1 hora.</summary>
+        /// <param name="nombreUsuario">Nombre de usuario.</param>
+        /// <param name="password">Contraseña en texto plano.</param>
+        /// <returns>El token JWT serializado, o null si las credenciales son inválidas.</returns>
         public async Task<string?> LoginAsync(string nombreUsuario, string password, CancellationToken cancellationToken = default)
         {
+            // Busca el usuario por nombre, insensible a mayúsculas/minúsculas.
             var usuario = await _contexto.Usuarios
                 .FirstOrDefaultAsync(
                     u => u.NombreUsuario.ToLower() == nombreUsuario.ToLower(),
@@ -34,6 +39,7 @@ namespace PracticoN5ServicioApiRest.Services
                 return null;
             }
 
+            // Compara la contraseña ingresada con el hash guardado en la base de datos.
             var resultadoContraseña = _passwordHasher.VerifyHashedPassword(usuario, usuario.PasswordHash, password);
 
             if (resultadoContraseña == PasswordVerificationResult.Failed)
@@ -41,6 +47,7 @@ namespace PracticoN5ServicioApiRest.Services
                 return null;
             }
 
+            // Claims del usuario que viajan dentro del token.
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, usuario.UsuarioId.ToString()),
@@ -48,20 +55,24 @@ namespace PracticoN5ServicioApiRest.Services
                 new Claim(ClaimTypes.Role, usuario.Rol)
             };
 
+            // Clave simétrica de firma, la misma que usa Program.cs para validar.
             var key = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(
                     _configuracion["Jwt:Key"]!));
 
+            // Algoritmo de firma HMAC-SHA256.
             var credentials = new SigningCredentials(
                 key,
                 SecurityAlgorithms.HmacSha256);
 
+            // Emisor, claims, expiración (1 hora) y firma.
             var token = new JwtSecurityToken(
                 issuer: _configuracion["Jwt:Issuer"],
                 claims: claims,
                 expires: DateTime.UtcNow.AddHours(1),
                 signingCredentials: credentials);
 
+            // Serializa el token a su forma de string (header.payload.signature).
             return new JwtSecurityTokenHandler()
                 .WriteToken(token);
         }

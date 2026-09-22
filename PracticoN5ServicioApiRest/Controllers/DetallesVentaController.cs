@@ -4,6 +4,7 @@ using PracticoN5ServicioApiRest.Services;
 
 namespace PracticoN5ServicioApiRest.Controllers
 {
+    // Todas las acciones requieren un token JWT válido (401 si falta o es inválido).
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]

@@ -13,6 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
+// IgnoreCycles evita errores de serialización JSON por referencias circulares entre navegaciones.
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
@@ -20,6 +21,7 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 
+// Swagger con esquema Bearer: habilita un botón "Authorize" para enviar el JWT en cada petición.
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -62,37 +64,51 @@ builder.Services.AddScoped<DetallesCompraService>();
 builder.Services.AddScoped<VentasService>();
 builder.Services.AddScoped<DetallesVentaService>();
 
+// CORS permisivo: acepta cualquier origen, header y verbo HTTP.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Permissive", policy =>
     {
+        // Cualquier origen (scheme + dominio + puerto).
         policy
             .AllowAnyOrigin()
+            // Cualquier header, incluido Authorization (necesario para enviar el JWT).
             .AllowAnyHeader()
+            // Todos los verbos HTTP (GET, POST, PUT, PATCH, DELETE, etc.).
             .AllowAnyMethod();
     });
 });
 
+// Autenticación/autorización con JWT Bearer.
+// Autenticación: valida QUIÉN es el cliente. Autorización: QUÉ puede hacer.
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // Reglas de validación que aplica el middleware a cada token recibido.
         options.TokenValidationParameters = new TokenValidationParameters
         {
+            // El token debe ser emitido por nuestro emisor (Jwt:Issuer).
             ValidateIssuer = true,
+            // Deshabilitada: la API no tiene una audiencia fija (no hay frontend).
             ValidateAudience = false, //no usamos frontend
+            // El token no debe estar expirado.
             ValidateLifetime = true,
+            // La firma debe poder verificarse con la clave conocida (Jwt:Key).
             ValidateIssuerSigningKey = true,
 
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
 
+            // Misma clave con la que se firma en UsuariosService.LoginAsync.
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(
                     builder.Configuration["Jwt:Key"]!))
         };
 
+        // Respuestas JSON en español en lugar de los mensajes genéricos de ASP.NET Core.
         options.Events = new JwtBearerEvents
         {
+            // Autenticación fallida: token faltante, inválido o expirado en un [Authorize].
             OnChallenge = async context =>
             {
                 context.HandleResponse();
@@ -101,10 +117,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
                 await context.Response.WriteAsJsonAsync(new
                 {
-                    mensaje = "Debe iniciar sesi�n para acceder a este recurso."
+                    mensaje = "Debe iniciar sesi�n para acceder a este recurso."
                 });
             },
 
+            // Autenticado pero sin permisos para la acción solicitada.
             OnForbidden = async context =>
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -117,17 +134,23 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// Habilita la interpretación de [Authorize] y las políticas de los claims del token.
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-//Usa swagger independientemente de si es entorno de desarrollo o de producci�n
+//Usa swagger independientemente de si es entorno de desarrollo o de producci�n
 app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
+
+// Aplica la política de CORS a todo el pipeline. Va antes de la autenticación para que las respuestas
+// de CORS lleguen aunque la petición luego sea rechazada por auth.
 app.UseCors("Permissive");
 
+// Orden obligatorio: UseAuthentication valida el token y construye la identidad del usuario;
+// UseAuthorization evalúa los [Authorize] en base a esa identidad. Deben ir en ese orden.
 app.UseAuthentication();
 app.UseAuthorization();
 

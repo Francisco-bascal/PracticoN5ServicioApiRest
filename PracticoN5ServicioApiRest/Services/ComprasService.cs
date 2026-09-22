@@ -14,11 +14,15 @@ namespace PracticoN5ServicioApiRest.Services
             _contexto = contexto;
         }
 
+        /// <summary>Devuelve las compras paginadas.</summary>
+        /// <param name="pagina">Número de página (default 1).</param>
+        /// <param name="tamanoPagina">Elementos por página (default 10, máx. 100).</param>
         public async Task<ResultadoPaginadoDto<Compra>> ObtenerTodosAsync(
             int pagina = 1, 
             int tamanoPagina = 10, 
             CancellationToken cancellationToken = default)
         {
+            // Validación de los parámetros de paginación.
             if (pagina <= 0)
             {
                 throw new ArgumentException("El número de página debe ser mayor o igual a 1.", nameof(pagina));
@@ -34,15 +38,21 @@ namespace PracticoN5ServicioApiRest.Services
                 throw new ArgumentException("El tamaño de página no puede superar el límite máximo de 100 elementos.", nameof(tamanoPagina));
             }
 
+            // AsNoTracking: consulta de solo lectura. Include: carga proveedor y detalles con producto.
             var consulta = _contexto.Compras
                 .AsNoTracking()
                 .Include(c => c.Proveedor)
                 .Include(c => c.Detalles)
                     .ThenInclude(d => d.Producto);
 
+            // Total de elementos (para calcular el total de páginas).
             int totalElementos = await consulta.CountAsync(cancellationToken);
+
+            // Total de páginas, redondeando hacia arriba.
             int totalPaginas = (int)Math.Ceiling(totalElementos / (double)tamanoPagina);
 
+            // Skip: salta las páginas anteriores. Take: toma la página actual.
+            // ToListAsync: materializa la consulta.
             var elementos = await consulta
                 .Skip((pagina - 1) * tamanoPagina)
                 .Take(tamanoPagina)
@@ -81,14 +91,18 @@ namespace PracticoN5ServicioApiRest.Services
                 .ToListAsync(cancellationToken);
         }
 
+        /// <summary>Registra una compra e incrementa el stock de cada producto, todo en una transacción.</summary>
+        /// <param name="compraDto">Datos de la compra: proveedor, fecha opcional y líneas de detalle.</param>
         public async Task<Compra> RegistrarCompraAsync(CreateCompraDTO compraDto, CancellationToken cancellationToken = default)
         {
+            // Debe tener al menos una línea de detalle.
             if (compraDto.Detalles == null || !compraDto.Detalles.Any())
             {
                 throw new InvalidOperationException(
                     "La compra debe incluir al menos una línea de detalle con un producto.");
             }
 
+            // El proveedor debe existir.
             bool proveedorExiste = await _contexto.Proveedores
                 .AnyAsync(
                     p => p.ProveedorId == compraDto.ProveedorId,
@@ -100,6 +114,7 @@ namespace PracticoN5ServicioApiRest.Services
                     $"El proveedor con ID {compraDto.ProveedorId} no existe.");
             }
 
+            // Inicia una transacción: compra, detalles y stock se confirman o revierten juntos.
             await using var transaccion =
                 await _contexto.Database.BeginTransactionAsync(cancellationToken);
 
@@ -107,6 +122,7 @@ namespace PracticoN5ServicioApiRest.Services
             {
                 var compra = new Compra
                 {
+                    // Fecha por defecto: la actual en UTC.
                     Fecha = compraDto.Fecha == default
                         ? DateTime.UtcNow
                         : compraDto.Fecha,
@@ -116,6 +132,7 @@ namespace PracticoN5ServicioApiRest.Services
 
                 foreach (var detalleDto in compraDto.Detalles)
                 {
+                    // Validación de cada línea: cantidad y precio deben ser positivos.
                     if (detalleDto.Cantidad <= 0)
                     {
                         throw new ArgumentException(
@@ -139,7 +156,7 @@ namespace PracticoN5ServicioApiRest.Services
                             $"No se encontró el producto con ID {detalleDto.ProductoId} para asociar al detalle de compra.");
                     }
 
-                    //Lógica de adición de stock
+                    //Lógica de adición de stock: comprar suma stock.
                     producto.Stock += detalleDto.Cantidad;
 
                     var detalle = new DetalleCompra
@@ -152,8 +169,11 @@ namespace PracticoN5ServicioApiRest.Services
                     compra.Detalles.Add(detalle);
                 }
 
+                // Guarda los cambios dentro de la transacción.
                 await _contexto.Compras.AddAsync(compra, cancellationToken);
                 await _contexto.SaveChangesAsync(cancellationToken);
+
+                // Confirma los cambios definitivamente.
                 await transaccion.CommitAsync(cancellationToken);
 
                 // Cargar datos relacionados para la respuesta
@@ -171,13 +191,17 @@ namespace PracticoN5ServicioApiRest.Services
             }
             catch
             {
+                // Ante cualquier error deshace todo y relanza la excepción.
                 await transaccion.RollbackAsync(cancellationToken);
                 throw;
             }
         }
 
+        /// <summary>Anula una compra y revierte el stock que había sumado, todo en una transacción.</summary>
+        /// <param name="id">Identificador de la compra a anular.</param>
         public async Task<bool> AnularCompraAsync(int id, CancellationToken cancellationToken = default)
         {
+            // Transacción: stock, detalles y cabecera se modifican juntos.
             await using var transaccion = await _contexto.Database.BeginTransactionAsync(cancellationToken);
 
             try
@@ -199,19 +223,23 @@ namespace PracticoN5ServicioApiRest.Services
 
                     if (producto != null)
                     {
+                        // Impide anular si el stock ya se consumió (quedaría negativo).
                         if (producto.Stock < detalle.Cantidad)
                         {
                             throw new InvalidOperationException($"No es posible anular la compra: el stock actual de '{producto.Nombre}' ({producto.Stock}) es inferior a la cantidad comprada ({detalle.Cantidad}) a revertir.");
                         }
 
+                        // Descuenta del stock lo que la compra había sumado.
                         producto.Stock -= detalle.Cantidad;
                     }
                 }
 
-                //Primero se eliminan los detalles para luego poder eliminar la compra
+                //Primero se eliminan los detalles para luego poder eliminar la compra.
+                //El orden es obligatorio por la restricción DeleteBehavior.Restrict.
                 _contexto.DetallesCompra.RemoveRange(compra.Detalles);
                 _contexto.Compras.Remove(compra);
 
+                // Guarda y confirma los cambios.
                 await _contexto.SaveChangesAsync(cancellationToken);
                 await transaccion.CommitAsync(cancellationToken);
 
@@ -219,6 +247,7 @@ namespace PracticoN5ServicioApiRest.Services
             }
             catch
             {
+                // Deshace todo (stock y eliminaciones) y relanza la excepción.
                 await transaccion.RollbackAsync(cancellationToken);
                 throw;
             }

@@ -6,6 +6,7 @@ using PracticoN5ServicioApiRest.Services;
 
 namespace PracticoN5ServicioApiRest.Controllers
 {
+    // Todas las acciones requieren un token JWT válido (401 si falta o es inválido).
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
@@ -18,6 +19,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             _servicio = servicio;
         }
 
+        /// <summary>Devuelve las ventas paginadas (pagina y tamanoPagina por query string; defaults 1 y 10).</summary>
         [HttpGet]
         public async Task<IActionResult> ObtenerTodos(
             [FromQuery] int pagina = 1, 

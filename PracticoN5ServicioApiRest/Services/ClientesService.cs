@@ -14,11 +14,15 @@ namespace PracticoN5ServicioApiRest.Services
             _contexto = contexto;
         }
 
+        /// <summary>Devuelve los clientes paginados.</summary>
+        /// <param name="pagina">Número de página (default 1).</param>
+        /// <param name="tamanoPagina">Elementos por página (default 10, máx. 100).</param>
         public async Task<ResultadoPaginadoDto<Cliente>> ObtenerTodosAsync(
             int pagina = 1, 
             int tamanoPagina = 10, 
             CancellationToken cancellationToken = default)
         {
+            // Validación de los parámetros de paginación.
             if (pagina <= 0)
             {
                 throw new ArgumentException("El número de página debe ser mayor o igual a 1.", nameof(pagina));
@@ -34,12 +38,18 @@ namespace PracticoN5ServicioApiRest.Services
                 throw new ArgumentException("El tamaño de página no puede superar el límite máximo de 100 elementos.", nameof(tamanoPagina));
             }
 
+            // AsNoTracking: consulta de solo lectura, sin seguimiento de cambios.
             var consulta = _contexto.Clientes
                 .AsNoTracking();
 
+            // Total de elementos (para calcular el total de páginas).
             int totalElementos = await consulta.CountAsync(cancellationToken);
+
+            // Total de páginas, redondeando hacia arriba.
             int totalPaginas = (int)Math.Ceiling(totalElementos / (double)tamanoPagina);
 
+            // Skip: salta las páginas anteriores. Take: toma la página actual.
+            // ToListAsync: materializa la consulta.
             var elementos = await consulta
                 .Skip((pagina - 1) * tamanoPagina)
                 .Take(tamanoPagina)
