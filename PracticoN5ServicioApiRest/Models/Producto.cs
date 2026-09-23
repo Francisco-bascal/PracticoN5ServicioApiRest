@@ -23,6 +23,7 @@ namespace PracticoN5ServicioApiRest.Models
         [MaxLength(300)]
         public string? ImagenRuta { get; set; }
 
+
         [ForeignKey(nameof(Categoria))]
         public int CategoriaId { get; set; }
         public virtual CategoriaProducto Categoria { get; set; } = null!;

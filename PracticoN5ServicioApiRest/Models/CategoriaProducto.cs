@@ -13,6 +13,7 @@ namespace PracticoN5ServicioApiRest.Models
         [MaxLength(500)]
         public string? Descripcion { get; set; }
 
+
         [InverseProperty(nameof(Producto.Categoria))]
         public ICollection<Producto> Productos { get; set; } = new List<Producto>();
     }

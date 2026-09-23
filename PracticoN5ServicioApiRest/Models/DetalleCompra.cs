@@ -16,10 +16,12 @@ namespace PracticoN5ServicioApiRest.Models
         [Range(0.01, double.MaxValue)]
         public decimal PrecioUnitario { get; set; }
 
+
         [ForeignKey(nameof(Compra))]
         public int CompraId { get; set; }
         [Required]
         public Compra Compra { get; set; } = null!;
+
 
         [ForeignKey(nameof(Producto))]
         public int ProductoId { get; set; }

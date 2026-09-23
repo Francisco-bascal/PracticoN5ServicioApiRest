@@ -22,7 +22,7 @@ namespace PracticoN5ServicioApiRest.Services
             _passwordHasher = new PasswordHasher<Usuario>();
         }
 
-/// <summary>Valida las credenciales y, si son correctas, genera el token JWT firmado y expirado a 1 hora.</summary>
+        /// <summary>Valida las credenciales y, si son correctas, genera el token JWT firmado y expirado a 1 hora.</summary>
         /// <param name="nombreUsuario">Nombre de usuario.</param>
         /// <param name="password">Contraseña en texto plano.</param>
         /// <returns>El token JWT serializado, o null si las credenciales son inválidas.</returns>

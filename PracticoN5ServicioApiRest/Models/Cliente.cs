@@ -20,6 +20,7 @@ namespace PracticoN5ServicioApiRest.Models
         [Length(3,200)]
         public string? Direccion { get; set; }
 
+
         [InverseProperty(nameof(Venta.Cliente))]
         public ICollection<Venta> Ventas { get; set; } = new List<Venta>();
     }

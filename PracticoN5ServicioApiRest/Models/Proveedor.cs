@@ -18,6 +18,7 @@ namespace PracticoN5ServicioApiRest.Models
         [Length(3, 200)]
         public string? Direccion { get; set; }
 
+
         [InverseProperty(nameof(Compra.Proveedor))]
         public ICollection<Compra> Compras { get; set; } = new List<Compra>();
     }

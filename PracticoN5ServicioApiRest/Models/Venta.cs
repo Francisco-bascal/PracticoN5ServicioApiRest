@@ -10,6 +10,8 @@ namespace PracticoN5ServicioApiRest.Models
         [Required]
         public DateTime Fecha { get; set; }
         
+
+
         [Required]
         [ForeignKey(nameof(Cliente))]
         public int ClienteId { get; set; }
