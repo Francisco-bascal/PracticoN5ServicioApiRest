@@ -126,6 +126,7 @@ namespace PracticoN5ServicioApiRest.Services
                 throw new InvalidOperationException($"El correo electrónico '{usuario.Email}' ya está registrado.");
             }
 
+            //Se hashea la contraseña ingresada por el usuario
             usuario.PasswordHash = _passwordHasher.HashPassword(usuario, usuario.PasswordHash);
 
             await _contexto.Usuarios.AddAsync(usuario, cancellationToken);
