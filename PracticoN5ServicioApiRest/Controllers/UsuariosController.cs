@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
+using PracticoN5ServicioApiRest.DTOs;
 using PracticoN5ServicioApiRest.Models;
 using PracticoN5ServicioApiRest.Services;
-using PracticoN5ServicioApiRest.DTOs;
+using System.Security.Claims;
 
 namespace PracticoN5ServicioApiRest.Controllers
 {
-// "test" y "login" son públicas ([AllowAnonymous]); el resto exige token JWT válido.
+    // "test", "login" y "registro" son públicas ([AllowAnonymous]); el resto exige token JWT válido
+    // (Crear, Actualizar y Eliminar solo para Administrador).
     [ApiController]
     [Route("api/[controller]")]
     public class UsuariosController : ControllerBase
@@ -48,12 +49,37 @@ namespace PracticoN5ServicioApiRest.Controllers
             });
         }
 
+        [AllowAnonymous]
+        [HttpPost("registro")]
+        /// <summary>Registra un usuario nuevo y le asigna automáticamente el rol Operador.</summary>
+        public async Task<IActionResult> Registrar(
+            [FromBody] RegistrarUsuarioDTO request,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var usuarioCreado = await _servicio.RegistrarOperadorAsync(request, cancellationToken);
+                return CreatedAtAction(
+                    nameof(ObtenerPorId),
+                    new { id = usuarioCreado.UsuarioId },
+                    MapearARespuesta(usuarioCreado));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(ex.Message);
+            }
+        }
+
         [Authorize]
         [HttpGet]
         public async Task<IActionResult> ObtenerTodos(CancellationToken cancellationToken = default)
         {
             var usuarios = await _servicio.ObtenerTodosAsync(cancellationToken);
-            return Ok(usuarios);
+            return Ok(usuarios.Select(MapearARespuesta).ToList());
         }
 
         [Authorize]
@@ -66,13 +92,13 @@ namespace PracticoN5ServicioApiRest.Controllers
                 return NotFound($"No se encontró el usuario con ID {id}.");
             }
 
-            return Ok(usuario);
+            return Ok(MapearARespuesta(usuario));
         }
 
         [Authorize]
         [HttpGet("usuario/{nombreUsuario}")]
         public async Task<IActionResult> ObtenerPorNombreUsuario(
-            string nombreUsuario, 
+            string nombreUsuario,
             CancellationToken cancellationToken = default)
         {
             var usuario = await _servicio.ObtenerPorNombreUsuarioAsync(nombreUsuario, cancellationToken);
@@ -81,22 +107,22 @@ namespace PracticoN5ServicioApiRest.Controllers
                 return NotFound($"No se encontró el usuario con nombre '{nombreUsuario}'.");
             }
 
-            return Ok(usuario);
+            return Ok(MapearARespuesta(usuario));
         }
 
-        [Authorize]
+        [Authorize(Roles = "Administrador")]
         [HttpPost]
         public async Task<IActionResult> Crear(
-            [FromBody] Usuario usuario, 
+            [FromBody] CrearUsuarioDTO request,
             CancellationToken cancellationToken = default)
         {
             try
             {
-                var usuarioCreado = await _servicio.CrearAsync(usuario, cancellationToken);
+                var usuarioCreado = await _servicio.CrearAsync(request, cancellationToken);
                 return CreatedAtAction(
-                    nameof(ObtenerPorId), 
-                    new { id = usuarioCreado.UsuarioId }, 
-                    usuarioCreado);
+                    nameof(ObtenerPorId),
+                    new { id = usuarioCreado.UsuarioId },
+                    MapearARespuesta(usuarioCreado));
             }
             catch (ArgumentException ex)
             {
@@ -108,17 +134,21 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
-        [Authorize]
+        [Authorize(Roles = "Administrador")]
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Actualizar(
-            int id, 
-            [FromBody] Usuario usuario, 
+            int id,
+            [FromBody] ActualizarUsuarioDTO request,
             CancellationToken cancellationToken = default)
         {
             try
             {
-                var usuarioActualizado = await _servicio.ActualizarAsync(id, usuario, cancellationToken);
-                return Ok(usuarioActualizado);
+                var usuarioActualizado = await _servicio.ActualizarAsync(
+                    id,
+                    request,
+                    ObtenerIdUsuarioActual(),
+                    cancellationToken);
+                return Ok(MapearARespuesta(usuarioActualizado));
             }
             catch (KeyNotFoundException ex)
             {
@@ -134,19 +164,39 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
-        [Authorize]
+        [Authorize(Roles = "Administrador")]
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Eliminar(int id, CancellationToken cancellationToken = default)
         {
             try
             {
-                await _servicio.EliminarAsync(id, cancellationToken);
+                await _servicio.EliminarAsync(id, ObtenerIdUsuarioActual(), cancellationToken);
                 return NoContent();
             }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(ex.Message);
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(ex.Message);
+            }
+        }
+
+        private int ObtenerIdUsuarioActual()
+        {
+            return int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        }
+
+        private static UsuarioResponseDTO MapearARespuesta(Usuario usuario)
+        {
+            return new UsuarioResponseDTO
+            {
+                UsuarioId = usuario.UsuarioId,
+                NombreUsuario = usuario.NombreUsuario,
+                Email = usuario.Email,
+                Rol = usuario.Rol
+            };
         }
     }
 }

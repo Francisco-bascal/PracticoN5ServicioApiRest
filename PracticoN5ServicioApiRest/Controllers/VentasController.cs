@@ -85,6 +85,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
+        [Authorize(Roles = "Administrador")]
         [HttpPost("{id:int}/anular")]
         public async Task<IActionResult> Anular(int id, CancellationToken cancellationToken = default)
         {

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PracticoN5ServicioApiRest.Data;
+using PracticoN5ServicioApiRest.DTOs;
 using PracticoN5ServicioApiRest.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -22,7 +23,7 @@ namespace PracticoN5ServicioApiRest.Services
             _passwordHasher = new PasswordHasher<Usuario>();
         }
 
-        /// <summary>Valida las credenciales y, si son correctas, genera el token JWT firmado y expirado a 1 hora.</summary>
+        /// <summary>Valida las credenciales y, si son correctas, genera el token JWT firmado con la expiración de la configuración.</summary>
         /// <param name="nombreUsuario">Nombre de usuario.</param>
         /// <param name="password">Contraseña en texto plano.</param>
         /// <returns>El token JWT serializado, o null si las credenciales son inválidas.</returns>
@@ -65,11 +66,11 @@ namespace PracticoN5ServicioApiRest.Services
                 key,
                 SecurityAlgorithms.HmacSha256);
 
-            // Emisor, claims, expiración (1 hora) y firma.
+            // Emisor, claims, expiración (de la configuración) y firma.
             var token = new JwtSecurityToken(
                 issuer: _configuracion["Jwt:Issuer"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddHours(1),
+                expires: DateTime.UtcNow.AddMinutes(_configuracion.GetValue<int?>("Jwt:ExpirationMinutes") ?? 60),
                 signingCredentials: credentials);
 
             // Serializa el token a su forma de string (header.payload.signature).
@@ -98,36 +99,38 @@ namespace PracticoN5ServicioApiRest.Services
                 .FirstOrDefaultAsync(u => u.NombreUsuario.ToLower() == nombreUsuario.ToLower(), cancellationToken);
         }
 
-        public async Task<Usuario> CrearAsync(Usuario usuario, CancellationToken cancellationToken = default)
+        public async Task<Usuario> RegistrarOperadorAsync(RegistrarUsuarioDTO dto, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(usuario.NombreUsuario))
+            await ValidarUnicidadAsync(dto.NombreUsuario, dto.Email, null, cancellationToken);
+
+            // El registro público asigna siempre el rol Operador.
+            var usuario = new Usuario
             {
-                throw new ArgumentException("El nombre de usuario es obligatorio.", nameof(usuario));
-            }
+                NombreUsuario = dto.NombreUsuario,
+                Email = dto.Email,
+                Rol = "Operador",
+                PasswordHash = _passwordHasher.HashPassword(new Usuario(), dto.Password)
+            };
 
-            if (string.IsNullOrWhiteSpace(usuario.Email))
+            await _contexto.Usuarios.AddAsync(usuario, cancellationToken);
+            await _contexto.SaveChangesAsync(cancellationToken);
+
+            return usuario;
+        }
+
+        public async Task<Usuario> CrearAsync(CrearUsuarioDTO dto, CancellationToken cancellationToken = default)
+        {
+            ValidarRol(dto.Rol);
+
+            await ValidarUnicidadAsync(dto.NombreUsuario, dto.Email, null, cancellationToken);
+
+            var usuario = new Usuario
             {
-                throw new ArgumentException("El correo electrónico es obligatorio.", nameof(usuario));
-            }
-
-            bool nombreUsuarioExiste = await _contexto.Usuarios
-                .AnyAsync(u => u.NombreUsuario.ToLower() == usuario.NombreUsuario.ToLower(), cancellationToken);
-
-            if (nombreUsuarioExiste)
-            {
-                throw new InvalidOperationException($"El nombre de usuario '{usuario.NombreUsuario}' ya está en uso.");
-            }
-
-            bool emailExiste = await _contexto.Usuarios
-                .AnyAsync(u => u.Email.ToLower() == usuario.Email.ToLower(), cancellationToken);
-
-            if (emailExiste)
-            {
-                throw new InvalidOperationException($"El correo electrónico '{usuario.Email}' ya está registrado.");
-            }
-
-            //Se hashea la contraseña ingresada por el usuario
-            usuario.PasswordHash = _passwordHasher.HashPassword(usuario, usuario.PasswordHash);
+                NombreUsuario = dto.NombreUsuario,
+                Email = dto.Email,
+                Rol = dto.Rol,
+                PasswordHash = _passwordHasher.HashPassword(new Usuario(), dto.Password)
+            };
 
             await _contexto.Usuarios.AddAsync(usuario, cancellationToken);
             await _contexto.SaveChangesAsync(cancellationToken);
@@ -136,10 +139,13 @@ namespace PracticoN5ServicioApiRest.Services
         }
 
         public async Task<Usuario> ActualizarAsync(
-            int id, 
-            Usuario usuarioActualizado, 
+            int id,
+            ActualizarUsuarioDTO dto,
+            int idUsuarioActual,
             CancellationToken cancellationToken = default)
         {
+            ValidarRol(dto.Rol);
+
             var usuarioExistente = await _contexto.Usuarios
                 .FirstOrDefaultAsync(u => u.UsuarioId == id, cancellationToken);
 
@@ -148,41 +154,23 @@ namespace PracticoN5ServicioApiRest.Services
                 throw new KeyNotFoundException($"No se encontró el usuario con ID {id}.");
             }
 
-            if (string.IsNullOrWhiteSpace(usuarioActualizado.NombreUsuario))
+            await ValidarUnicidadAsync(dto.NombreUsuario, dto.Email, id, cancellationToken);
+
+            // No se puede degradar al único administrador del sistema.
+            if (usuarioExistente.Rol == "Administrador"
+                && dto.Rol != "Administrador"
+                && await EsElUnicoAdministradorAsync(id, cancellationToken))
             {
-                throw new ArgumentException("El nombre de usuario no puede estar vacío.", nameof(usuarioActualizado));
+                throw new InvalidOperationException("No se puede degradar al único administrador del sistema.");
             }
 
-            if (string.IsNullOrWhiteSpace(usuarioActualizado.Email))
+            usuarioExistente.NombreUsuario = dto.NombreUsuario;
+            usuarioExistente.Email = dto.Email;
+            usuarioExistente.Rol = dto.Rol;
+
+            if (!string.IsNullOrWhiteSpace(dto.Password))
             {
-                throw new ArgumentException("El correo electrónico no puede estar vacío.", nameof(usuarioActualizado));
-            }
-
-            bool nombreUsuarioExiste = await _contexto.Usuarios
-                .AnyAsync(u => u.UsuarioId != id && u.NombreUsuario.ToLower() == usuarioActualizado.NombreUsuario.ToLower(), cancellationToken);
-
-            if (nombreUsuarioExiste)
-            {
-                throw new InvalidOperationException($"El nombre de usuario '{usuarioActualizado.NombreUsuario}' ya está en uso.");
-            }
-
-            bool emailExiste = await _contexto.Usuarios
-                .AnyAsync(u => u.UsuarioId != id && u.Email.ToLower() == usuarioActualizado.Email.ToLower(), cancellationToken);
-
-            if (emailExiste)
-            {
-                throw new InvalidOperationException($"El correo electrónico '{usuarioActualizado.Email}' ya está registrado.");
-            }
-
-            usuarioExistente.NombreUsuario = usuarioActualizado.NombreUsuario;
-            usuarioExistente.Email = usuarioActualizado.Email;
-            usuarioExistente.Rol = usuarioActualizado.Rol;
-
-            if (!string.IsNullOrWhiteSpace(usuarioActualizado.PasswordHash))
-            {
-                usuarioExistente.PasswordHash = _passwordHasher.HashPassword(
-                    usuarioExistente,
-                    usuarioActualizado.PasswordHash);
+                usuarioExistente.PasswordHash = _passwordHasher.HashPassword(usuarioExistente, dto.Password);
             }
 
             await _contexto.SaveChangesAsync(cancellationToken);
@@ -190,8 +178,13 @@ namespace PracticoN5ServicioApiRest.Services
             return usuarioExistente;
         }
 
-        public async Task<bool> EliminarAsync(int id, CancellationToken cancellationToken = default)
+        public async Task<bool> EliminarAsync(int id, int idUsuarioActual, CancellationToken cancellationToken = default)
         {
+            if (id == idUsuarioActual)
+            {
+                throw new InvalidOperationException("No se puede eliminar el propio usuario.");
+            }
+
             var usuario = await _contexto.Usuarios
                 .FirstOrDefaultAsync(u => u.UsuarioId == id, cancellationToken);
 
@@ -200,10 +193,72 @@ namespace PracticoN5ServicioApiRest.Services
                 throw new KeyNotFoundException($"No se encontró el usuario con ID {id}.");
             }
 
+            // No se puede eliminar al único administrador del sistema.
+            if (await EsElUnicoAdministradorAsync(id, cancellationToken))
+            {
+                throw new InvalidOperationException("No se puede eliminar al único administrador del sistema.");
+            }
+
             _contexto.Usuarios.Remove(usuario);
             await _contexto.SaveChangesAsync(cancellationToken);
 
             return true;
+        }
+
+        private static void ValidarRol(string rol)
+        {
+            if (rol != "Administrador" && rol != "Operador")
+            {
+                throw new ArgumentException("El rol debe ser 'Administrador' o 'Operador'.", nameof(rol));
+            }
+        }
+
+        private async Task ValidarUnicidadAsync(
+            string? nombreUsuario,
+            string? email,
+            int? idExcepto,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(nombreUsuario))
+            {
+                throw new ArgumentException("El nombre de usuario es obligatorio.", nameof(nombreUsuario));
+            }
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                throw new ArgumentException("El correo electrónico es obligatorio.", nameof(email));
+            }
+
+            IQueryable<Usuario> consulta = _contexto.Usuarios;
+
+            if (idExcepto.HasValue)
+            {
+                consulta = consulta.Where(u => u.UsuarioId != idExcepto.Value);
+            }
+
+            if (await consulta.AnyAsync(u => u.NombreUsuario.ToLower() == nombreUsuario.ToLower(), cancellationToken))
+            {
+                throw new InvalidOperationException($"El nombre de usuario '{nombreUsuario}' ya está en uso.");
+            }
+
+            if (await consulta.AnyAsync(u => u.Email.ToLower() == email.ToLower(), cancellationToken))
+            {
+                throw new InvalidOperationException($"El correo electrónico '{email}' ya está registrado.");
+            }
+        }
+
+        private async Task<bool> EsElUnicoAdministradorAsync(int idUsuario, CancellationToken cancellationToken)
+        {
+            bool esAdministrador = await _contexto.Usuarios
+                .AnyAsync(u => u.UsuarioId == idUsuario && u.Rol == "Administrador", cancellationToken);
+
+            if (!esAdministrador)
+            {
+                return false;
+            }
+
+            return await _contexto.Usuarios
+                .CountAsync(u => u.Rol == "Administrador", cancellationToken) == 1;
         }
     }
 }

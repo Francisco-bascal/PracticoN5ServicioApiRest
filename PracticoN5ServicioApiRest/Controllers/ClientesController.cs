@@ -99,6 +99,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
+        [Authorize(Roles = "Administrador")]
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Eliminar(int id, CancellationToken cancellationToken = default)
         {
