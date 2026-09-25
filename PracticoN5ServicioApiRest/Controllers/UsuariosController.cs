@@ -188,6 +188,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             return int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         }
 
+        //Conversión de la entidad de usuario a un DTO que solo expone información no sensible
         private static UsuarioResponseDTO MapearARespuesta(Usuario usuario)
         {
             return new UsuarioResponseDTO

@@ -7,11 +7,13 @@ namespace PracticoN5ServicioApiRest.Services
 {
     public class ProductosService
     {
-        private readonly SistemaVentasDbContext _contexto;
+private readonly SistemaVentasDbContext _contexto;
+        private readonly ImagenesService _imagenesService;
 
-        public ProductosService(SistemaVentasDbContext contexto)
+        public ProductosService(SistemaVentasDbContext contexto, ImagenesService imagenesService)
         {
             _contexto = contexto;
+            _imagenesService = imagenesService;
         }
 
 /// <summary>Devuelve los productos paginados.</summary>
@@ -233,6 +235,43 @@ namespace PracticoN5ServicioApiRest.Services
             return true;
         }
 
+        public async Task<ResponseProductoDTO> ActualizarImagenAsync(int id, string rutaImagen, CancellationToken cancellationToken = default)
+        {
+            var producto = await _contexto.Productos
+                .FirstOrDefaultAsync(p => p.ProductoId == id, cancellationToken);
+
+            if (producto == null)
+            {
+                throw new KeyNotFoundException($"No se encontró el producto con ID {id}.");
+            }
+
+            string? rutaAnterior = producto.ImagenRuta;
+
+            producto.ImagenRuta = rutaImagen;
+            await _contexto.SaveChangesAsync(cancellationToken);
+
+            // Elimina la imagen anterior cuando se reemplaza por una distinta.
+            if (!string.IsNullOrWhiteSpace(rutaAnterior) && rutaAnterior != rutaImagen)
+            {
+                _imagenesService.Eliminar(rutaAnterior);
+            }
+
+            await _contexto.Entry(producto)
+                .Reference(p => p.Categoria)
+                .LoadAsync(cancellationToken);
+
+            return new ResponseProductoDTO
+            {
+                ProductoId = producto.ProductoId,
+                Nombre = producto.Nombre,
+                Descripcion = producto.Descripcion,
+                Precio = producto.Precio,
+                Stock = producto.Stock,
+                ImagenRuta = producto.ImagenRuta,
+                CategoriaId = producto.CategoriaId
+            };
+        }
+
         public async Task<bool> EliminarAsync(int id, CancellationToken cancellationToken = default)
         {
             var producto = await _contexto.Productos
@@ -259,8 +298,20 @@ namespace PracticoN5ServicioApiRest.Services
                 throw new InvalidOperationException("No se puede eliminar el producto porque tiene ventas registradas asociadas.");
             }
 
+string? rutaImagen = producto.ImagenRuta;
+
             _contexto.Productos.Remove(producto);
             await _contexto.SaveChangesAsync(cancellationToken);
+
+            // El fallo del borrado del archivo no revierte la eliminación del registro.
+            try
+            {
+                _imagenesService.Eliminar(rutaImagen);
+            }
+            catch (IOException)
+            {
+                // Un archivo huérfano no debe impedir la eliminación del producto.
+            }
 
             return true;
         }

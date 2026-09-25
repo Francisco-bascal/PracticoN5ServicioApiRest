@@ -27,6 +27,8 @@ namespace PracticoN5ServicioApiRest.Services
         /// <param name="nombreUsuario">Nombre de usuario.</param>
         /// <param name="password">Contraseña en texto plano.</param>
         /// <returns>El token JWT serializado, o null si las credenciales son inválidas.</returns>
+        
+        
         public async Task<string?> LoginAsync(string nombreUsuario, string password, CancellationToken cancellationToken = default)
         {
             // Busca el usuario por nombre, insensible a mayúsculas/minúsculas.

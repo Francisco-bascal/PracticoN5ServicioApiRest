@@ -63,6 +63,7 @@ builder.Services.AddScoped<ComprasService>();
 builder.Services.AddScoped<DetallesCompraService>();
 builder.Services.AddScoped<VentasService>();
 builder.Services.AddScoped<DetallesVentaService>();
+builder.Services.AddScoped<ImagenesService>();
 
 // CORS permisivo: acepta cualquier origen, header y verbo HTTP.
 builder.Services.AddCors(options =>

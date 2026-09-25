@@ -13,10 +13,12 @@ namespace PracticoN5ServicioApiRest.Controllers
     public class ProductosController : ControllerBase
     {
         private readonly ProductosService _servicio;
+        private readonly ImagenesService _imagenesService;
 
-        public ProductosController(ProductosService servicio)
+        public ProductosController(ProductosService servicio, ImagenesService imagenesService)
         {
             _servicio = servicio;
+            _imagenesService = imagenesService;
         }
 
         /// <summary>Devuelve los productos paginados (pagina y tamanoPagina por query string; defaults 1 y 10).</summary>
@@ -118,6 +120,60 @@ namespace PracticoN5ServicioApiRest.Controllers
             {
                 return BadRequest(ex.Message);
             }
+        }
+
+        [Authorize]
+        [HttpPost("{id:int}/imagen")]
+        public async Task<IActionResult> CargarImagen(int id, IFormFile archivo, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                string ruta = await _imagenesService.GuardarAsync(archivo, cancellationToken);
+
+                try
+                {
+                    var resultado = await _servicio.ActualizarImagenAsync(id, ruta, cancellationToken);
+                    return Ok(resultado);
+                }
+                catch
+                {
+                    _imagenesService.Eliminar(ruta);
+                    throw;
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
+
+        [Authorize]
+        [HttpGet("{id:int}/imagen")]
+        public async Task<IActionResult> ObtenerImagen(int id, CancellationToken cancellationToken = default)
+        {
+            var producto = await _servicio.ObtenerPorIdAsync(id, cancellationToken);
+            if (producto == null)
+            {
+                return NotFound($"No se encontró el producto con ID {id}.");
+            }
+
+            if (string.IsNullOrWhiteSpace(producto.ImagenRuta))
+            {
+                return NotFound("El producto no tiene una imagen cargada.");
+            }
+
+            string rutaFisica = _imagenesService.ObtenerRutaFisica(producto.ImagenRuta);
+
+            if (!System.IO.File.Exists(rutaFisica))
+            {
+                return NotFound("No se encontró el archivo de imagen del producto.");
+            }
+
+            return PhysicalFile(rutaFisica, _imagenesService.ObtenerContentType(producto.ImagenRuta));
         }
 
         [Authorize(Roles = "Administrador")]
