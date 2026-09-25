@@ -144,6 +144,7 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
+// Fuerza el redireccionamiento a HTTPS
 app.UseHttpsRedirection();
 
 // Aplica la política de CORS a todo el pipeline. Va antes de la autenticación para que las respuestas
