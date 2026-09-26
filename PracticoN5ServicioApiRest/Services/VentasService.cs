@@ -149,7 +149,7 @@ namespace PracticoN5ServicioApiRest.Services
                         throw new KeyNotFoundException($"No se encontró el producto con ID {detalleDto.ProductoId}.");
                     }
 
-                    // No se permite vender sin stock.
+                    // No se permite vender sin stock suficiente.
                     if (producto.Stock < detalleDto.Cantidad)
                     {
                         throw new InvalidOperationException(
@@ -177,6 +177,7 @@ namespace PracticoN5ServicioApiRest.Services
 
                 // Confirma los cambios definitivamente.
                 await transaccion.CommitAsync(cancellationToken);
+
 
                 // Cargar datos relacionados para la respuesta
                 await _contexto.Entry(venta)
