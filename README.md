@@ -10,18 +10,19 @@ Sistema de ventas y control de stock con **backend ASP.NET Core Web API** (TP 5)
 
 1. [Cumplimiento de las consignas](#cumplimiento-de-las-consignas)
 2. [Arquitectura](#arquitectura)
-3. [Estructura del repositorio](#estructura-del-repositorio)
-4. [Cómo ejecutarlo](#cómo-ejecutarlo)
-5. [Usuarios de ejemplo](#usuarios-de-ejemplo)
-6. [Roles y permisos](#roles-y-permisos)
-7. [Modelo de datos y normalización](#modelo-de-datos-y-normalización)
-8. [Endpoints de la API](#endpoints-de-la-api)
-9. [Flujos de negocio](#flujos-de-negocio)
-10. [Auditoría y registro de errores](#auditoría-y-registro-de-errores)
-11. [Configuración](#configuración)
-12. [Pruebas y qué se verificó](#pruebas-y-qué-se-verificó)
-13. [Trabajo en equipo y Git](#trabajo-en-equipo-y-git)
-14. [Limitaciones y mejoras posibles](#limitaciones-y-mejoras-posibles)
+3. [Interfaz y convenciones de frontend](#interfaz-y-convenciones-de-frontend)
+4. [Estructura del repositorio](#estructura-del-repositorio)
+5. [Cómo ejecutarlo](#cómo-ejecutarlo)
+6. [Usuarios de ejemplo](#usuarios-de-ejemplo)
+7. [Roles y permisos](#roles-y-permisos)
+8. [Modelo de datos y normalización](#modelo-de-datos-y-normalización)
+9. [Endpoints de la API](#endpoints-de-la-api)
+10. [Flujos de negocio](#flujos-de-negocio)
+11. [Auditoría y registro de errores](#auditoría-y-registro-de-errores)
+12. [Configuración](#configuración)
+13. [Pruebas y qué se verificó](#pruebas-y-qué-se-verificó)
+14. [Trabajo en equipo y Git](#trabajo-en-equipo-y-git)
+15. [Limitaciones y mejoras posibles](#limitaciones-y-mejoras-posibles)
 
 ---
 
@@ -30,7 +31,7 @@ Sistema de ventas y control de stock con **backend ASP.NET Core Web API** (TP 5)
 | Consigna del TP 6 | Cómo se cumple | Dónde |
 |---|---|---|
 | Frontend con **Blazor Hybrid** vinculado al backend del TP 5, probado en **Android** | App .NET MAUI con `BlazorWebView` que consume la API REST por HTTP/JWT. Objetivo de compilación: `net8.0-android`. | `PracticoN6.Frontend.Maui`, `PracticoN6.Frontend.Shared` |
-| **Catálogo de productos** (tipo mercado libre) y **carrito de compras** | Grilla de productos con imagen, búsqueda, filtro por categoría, orden por nombre/precio, "solo con stock" y paginación; detalle de producto; carrito persistente por usuario. | `Pages/Catalogo.razor`, `ProductoDetalle.razor`, `CarritoPagina.razor` |
+| **Catálogo de productos** (tipo mercado libre) y **carrito de compras** | Grilla de productos con imagen, búsqueda, filtro por categoría, hoja inferior para ordenar por nombre/precio y mostrar "solo con stock", y paginación; detalle de producto; carrito persistente por usuario. | `Pages/Catalogo.razor`, `ProductoDetalle.razor`, `CarritoPagina.razor` |
 | Registrar **ventas** y **entradas de mercadería**, con **control de stock** actualizado | Las ventas se registran desde el carrito (checkout) o como venta de mostrador; las entradas, como compras a proveedores. Cada cambio de stock queda en un **libro de movimientos** y se aplica con un `UPDATE` condicional en la base, pensado para que dos operaciones simultáneas no puedan dejar el stock negativo (las pruebas cubren la última unidad de forma secuencial; no hay una prueba de concurrencia real). | `MovimientosStockService`, `VentasService`, `ComprasService` |
 | Ver el catálogo con **disponibilidad y stock** | Cada producto muestra "Stock: N", "¡Últimas N unidades!" o "Sin stock" (botón deshabilitado). | `InsigniaStock.razor`, `TarjetaProducto.razor` |
 | **Compra y pago simulado** | Checkout con medio de pago (crédito, débito, transferencia) y pasarela simulada: aprueba con código de autorización o rechaza (HTTP 402). Stock, venta y pago se confirman **en una sola transacción**. | `Checkout.razor`, `PasarelaPagoSimulada`, `VentasService.CheckoutAsync` |
@@ -63,8 +64,20 @@ flowchart LR
 
 - **Backend**: `Controller → Service → DbContext (EF Core) → SQL Server`. Los servicios concentran la lógica y las transacciones; los controllers solo resuelven HTTP y roles.
 - **Frontend**: toda la interfaz y la lógica viven en una **Razor Class Library compartida**. La app MAUI es un *host* mínimo que aporta lo propio del dispositivo (almacenamiento cifrado del token, hoja de compartir de Android, permisos). El mismo código corre en el navegador (`PracticoN6.Frontend.Web`) para desarrollar y probar sin emulador.
-- Lo que depende de la plataforma se aísla en tres interfaces (`IAlmacenamientoSeguro`, `IPreferencias`, `IGestorArchivos`) que cada host implementa.
+- Lo que depende de la plataforma se aísla en cinco interfaces (`IAlmacenamientoSeguro`, `IPreferencias`, `IGestorArchivos`, `IConectividad`, `ICompartir`) que cada host implementa: en Android usan `SecureStorage`, `Connectivity` y la hoja de compartir del sistema; en el navegador, `localStorage`, `navigator.onLine` y `navigator.share` (o el portapapeles).
 
+---
+
+## Interfaz y convenciones de frontend
+
+La interfaz se rehízo siguiendo dos *skills* de desarrollo frontend (`.claude/skills/`): `frontend-core` (convenciones generales) y `blazor-hybrid`, que es la `blazor-webapp` original adaptada a Blazor Hybrid con .NET MAUI (no hay *render modes* ni prerenderizado: todo es interactivo y corre en el dispositivo).
+
+- **Bootstrap 5.3** como base de estilos, incluido en el repositorio (`wwwroot/lib`, sin CDN: la app debe funcionar sin internet en el teléfono) junto con **Bootstrap Icons**. No se usa el JavaScript de Bootstrap: los modales, avisos (*toast*) y la hoja de filtros (*offcanvas*) usan solo sus clases CSS y el estado de Blazor. `wwwroot/css/app.css` contiene únicamente lo que Bootstrap no resuelve (marca, barra de pestañas, áreas seguras del teléfono, ajustes táctiles).
+- **Móvil primero**: navegación por pestañas inferiores, controles de al menos 44 px, teclados adecuados (`inputmode`, `autocomplete`), barras de acción fijas para "Pagar" y "Registrar", respeto de las áreas seguras (muesca y barra de gestos) y **modo oscuro** automático según el teléfono.
+- **Componentes reutilizables** con `[Parameter]` y *callbacks* (`Components/`): `EstadoVista` (resuelve los cuatro estados de toda lista: cargando, error con *Reintentar*, vacío y con datos), `EncabezadoPagina`, `Alerta`, `Paginador`, `TarjetaProducto`, `ImagenProducto`, `InsigniaStock`, `SelectorCantidad`, `DialogoConfirmacion`, `Notificaciones`, `EntradaPassword`, `AtajoPanel`, `EnlaceTab` y `ConectividadAviso` (franja "sin conexión").
+- **Formularios** con `EditForm`, Data Annotations y `ValidacionBootstrap` (marca el campo inválido con `is-invalid` y muestra el mensaje junto a él); los botones se deshabilitan mientras se envía para evitar envíos duplicados. El servidor vuelve a validar todo.
+- **Accesibilidad**: HTML semántico, `label` en cada campo, `aria-label` en botones de ícono, `aria-current` en la pestaña activa, `aria-live` en avisos y foco al abrir los diálogos.
+- Sin JavaScript para manipular el DOM: el pequeño `wwwroot/js/tienda.js` solo existe para el host web (descarga de archivos, `localStorage`, estado de red y compartir).
 ---
 
 ## Estructura del repositorio
@@ -79,12 +92,16 @@ PracticoN5ServicioApiRest.sln
 │   ├── Migrations/                     migraciones EF Core (la nueva: Tp6BlazorHybrid)
 │   ├── appsettings.Development.json   configuración de desarrollo lista para usar (SQLite)
 │   └── appsettings.example.json        plantilla para SQL Server (copiar como appsettings.Local.json)
-├── PracticoN5ServicioApiRest.Tests/    167 pruebas de integración de la API
+├── PracticoN5ServicioApiRest.Tests/    168 pruebas de integración de la API
 ├── PracticoN6.Frontend.Shared/         UI y lógica del frontend (Razor Class Library)
-├── PracticoN6.Frontend.Shared.Tests/   67 pruebas unitarias del frontend
+│   ├── Components/  Pages/  Layout/    componentes reutilizables, pantallas y estructura
+│   ├── Services/  Models/              cliente HTTP, sesión, carrito, contratos de la API
+│   └── wwwroot/                        Bootstrap y Bootstrap Icons (locales), app.css, tienda.js
+├── PracticoN6.Frontend.Shared.Tests/   70 pruebas unitarias del frontend
 ├── PracticoN6.Frontend.Maui/           app Android (.NET MAUI + Blazor Hybrid)
 ├── PracticoN6.Frontend.Web/            host web (Blazor WebAssembly) para desarrollo y pruebas
-└── e2e/                                recorridos automáticos de la interfaz (Playwright)
+├── e2e/                                recorridos automáticos de la interfaz (Playwright)
+└── .claude/skills/                     convenciones de frontend (frontend-core y blazor-hybrid)
 ```
 
 ---
@@ -318,9 +335,9 @@ Valores de desarrollo en `appsettings.Development.json`; referencia completa de 
 
 | Suite | Cantidad | Qué cubre |
 |---|---:|---|
-| `PracticoN5ServicioApiRest.Tests` | 167 | Autenticación, **matriz de acceso por rol**, catálogo (búsqueda, filtros, orden, paginación), stock y movimientos, compras/ventas/anulaciones, checkout (precios del servidor, pago aprobado/rechazado, rollback, última unidad), reportes y correo, auditoría, registro de errores, límites de frecuencia, revalidación del token, gestión de usuarios. Corren la API completa en memoria con SQLite. |
-| `PracticoN6.Frontend.Shared.Tests` | 67 | Cliente HTTP (token, mensajes de error, sesión vencida, sin conexión), sesión y restauración, carrito por usuario, formato de importes y fechas, configuración del servidor. |
-| `e2e/` (Playwright) | 2 recorridos | La **interfaz real** en un navegador con tamaño de teléfono, contra la API real: login, catálogo, carrito, pago rechazado y aprobado, comprobante PDF, y todo el flujo del personal (productos con imagen, stock, compras, movimientos, reportes, usuarios, auditoría, restricciones por rol). |
+| `PracticoN5ServicioApiRest.Tests` | 168 | Autenticación, **matriz de acceso por rol**, catálogo (búsqueda, filtros, orden, paginación), stock y movimientos, compras/ventas/anulaciones, checkout (precios del servidor, pago aprobado/rechazado, rollback, última unidad), reportes y correo, auditoría, registro de errores, límites de frecuencia, revalidación del token, gestión de usuarios. Corren la API completa en memoria con SQLite. |
+| `PracticoN6.Frontend.Shared.Tests` | 70 | Cliente HTTP (token, mensajes de error, sesión vencida, sin conexión), sesión y restauración, carrito por usuario, formato de importes y fechas, configuración del servidor, clases de validación de Bootstrap. |
+| `e2e/` (Playwright) | 2 recorridos | La **interfaz real** en un navegador con tamaño de teléfono, contra la API real: login, catálogo con hoja de filtros, aviso de falta de red, compartir un producto, modo oscuro, carrito, pago rechazado y aprobado, comprobante PDF, y todo el flujo del personal (productos con imagen, stock, compras, movimientos, reportes, usuarios, auditoría, restricciones por rol). |
 
 ```bash
 dotnet test PracticoN5ServicioApiRest.Tests
@@ -337,7 +354,8 @@ Las pruebas y una revisión de código independiente encontraron y permitieron c
 - las listas paginadas del TP 5 no tenían orden determinista;
 - un ajuste de stock con una observación larga cambiaba el stock pero no dejaba el movimiento;
 - el carrito podía duplicar ítems al cargarse dos veces a la vez, y la pantalla *Servidor* fallaba siempre al probar la conexión;
-- un botón que exigía dos toques en pantallas táctiles por enlazarse al evento equivocado.
+- un botón que exigía dos toques en pantallas táctiles por enlazarse al evento equivocado;
+- en el rediseño, los mensajes de error se veían como el texto literal `_error` (un parámetro de texto sin `@`, que compila igual) y la hoja de filtros quedaba recortada por una regla de Bootstrap 5.3 más específica que la propia: solo el recorrido en el navegador lo mostró, no la compilación ni las pruebas unitarias.
 
 ### Qué **no** se pudo verificar (a tener en cuenta)
 
@@ -346,6 +364,7 @@ El desarrollo y las pruebas se hicieron en un entorno Linux sin acceso al SDK de
 - **La compilación y ejecución de `PracticoN6.Frontend.Maui` en Android no se probó.** Se escribió siguiendo la plantilla oficial de .NET 8 y se comprobó que su código C# compila contra los paquetes reales de MAUI (con el XAML simulado), y que toda la interfaz que hospeda funciona en el navegador. Falta la prueba en un emulador/dispositivo: es lo primero que conviene hacer.
 - **La migración no se ejecutó contra SQL Server**: se revisó el script SQL que genera (`dotnet-ef migrations script`) pero las pruebas automáticas usan SQLite (que crea el esquema directamente). Pruébela primero sobre una copia de la base del TP 5.
 - **El envío real por SMTP no se probó** (sí el armado del mensaje con su PDF adjunto, que se verifica en el `.eml` generado).
+- **El aspecto en el WebView de Android no se vio**: el rediseño se verificó en Chromium con tamaño de teléfono (modo claro y oscuro). `Connectivity` y la hoja de compartir de Android (`Share`) solo se comprobaron a nivel de compilación; en el navegador se probó su equivalente (aviso de red y portapapeles). Conviene revisar en el dispositivo las áreas seguras, los íconos y el teclado en pantalla.
 
 ---
 

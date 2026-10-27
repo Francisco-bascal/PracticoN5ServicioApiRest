@@ -2,33 +2,39 @@
 @attribute [Authorize(Roles = Roles.Personal)]
 @inject SesionService Sesion
 
-<div class="pagina">
-    <h1>Panel de gestión</h1>
-    <p class="suave">Sesión iniciada como <strong>@Sesion.NombreUsuario</strong> (@Sesion.Rol).</p>
+<div class="container-md py-3">
+    <EncabezadoPagina Titulo="Panel de gestión" Icono="gear"
+                      Subtitulo="@($"Sesión iniciada como {Sesion.NombreUsuario} ({Sesion.Rol}).")" />
 
-    <h2>Catálogo y stock</h2>
-    <div class="grilla-panel">
-        <a class="atajo" href="admin/productos"><span class="atajo-icono">📦</span>Productos<small>Precios, stock e imágenes</small></a>
-        <a class="atajo" href="admin/categorias"><span class="atajo-icono">🗂️</span>Categorías</a>
-        <a class="atajo" href="admin/movimientos"><span class="atajo-icono">🔄</span>Movimientos<small>Entradas y salidas de stock</small></a>
-    </div>
+    <section aria-labelledby="seccion-catalogo">
+        <h2 class="h6 text-uppercase text-body-secondary" id="seccion-catalogo">Catálogo y stock</h2>
+        <div class="row row-cols-2 row-cols-md-3 g-2 mb-4">
+            <AtajoPanel Href="admin/productos" Icono="box-seam" Titulo="Productos" Descripcion="Precios, stock e imágenes" />
+            <AtajoPanel Href="admin/categorias" Icono="tags" Titulo="Categorías" />
+            <AtajoPanel Href="admin/movimientos" Icono="arrow-left-right" Titulo="Movimientos" Descripcion="Entradas y salidas de stock" />
+        </div>
+    </section>
 
-    <h2>Compras y ventas</h2>
-    <div class="grilla-panel">
-        <a class="atajo" href="admin/compras"><span class="atajo-icono">🚚</span>Entradas<small>Compras a proveedores</small></a>
-        <a class="atajo" href="admin/ventas"><span class="atajo-icono">🧾</span>Ventas</a>
-        <a class="atajo" href="admin/reportes"><span class="atajo-icono">📊</span>Reportes PDF</a>
-        <a class="atajo" href="admin/proveedores"><span class="atajo-icono">🏭</span>Proveedores</a>
-        <a class="atajo" href="admin/clientes"><span class="atajo-icono">🧑‍🤝‍🧑</span>Clientes</a>
-    </div>
+    <section aria-labelledby="seccion-operaciones">
+        <h2 class="h6 text-uppercase text-body-secondary" id="seccion-operaciones">Compras y ventas</h2>
+        <div class="row row-cols-2 row-cols-md-3 g-2 mb-4">
+            <AtajoPanel Href="admin/compras" Icono="truck" Titulo="Entradas" Descripcion="Compras a proveedores" />
+            <AtajoPanel Href="admin/ventas" Icono="receipt" Titulo="Ventas" />
+            <AtajoPanel Href="admin/reportes" Icono="file-earmark-bar-graph" Titulo="Reportes PDF" />
+            <AtajoPanel Href="admin/proveedores" Icono="building" Titulo="Proveedores" />
+            <AtajoPanel Href="admin/clientes" Icono="people" Titulo="Clientes" />
+        </div>
+    </section>
 
     @if (Sesion.EsAdministrador)
     {
-        <h2>Administración</h2>
-        <div class="grilla-panel">
-            <a class="atajo" href="admin/usuarios"><span class="atajo-icono">🔐</span>Usuarios y roles</a>
-            <a class="atajo" href="admin/auditoria"><span class="atajo-icono">🕵️</span>Auditoría<small>Quién hizo qué</small></a>
-            <a class="atajo" href="admin/errores"><span class="atajo-icono">🐞</span>Errores<small>Registro de fallas</small></a>
-        </div>
+        <section aria-labelledby="seccion-admin">
+            <h2 class="h6 text-uppercase text-body-secondary" id="seccion-admin">Administración</h2>
+            <div class="row row-cols-2 row-cols-md-3 g-2">
+                <AtajoPanel Href="admin/usuarios" Icono="shield-lock" Titulo="Usuarios y roles" />
+                <AtajoPanel Href="admin/auditoria" Icono="journal-text" Titulo="Auditoría" Descripcion="Quién hizo qué" />
+                <AtajoPanel Href="admin/errores" Icono="bug" Titulo="Errores" Descripcion="Registro de fallas" />
+            </div>
+        </section>
     }
 </div>

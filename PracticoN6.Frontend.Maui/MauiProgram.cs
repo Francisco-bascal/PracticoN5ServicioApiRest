@@ -31,6 +31,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<IAlmacenamientoSeguro, AlmacenamientoSeguroMaui>();
         builder.Services.AddSingleton<IPreferencias, PreferenciasMaui>();
         builder.Services.AddSingleton<IGestorArchivos, GestorArchivosMaui>();
+        builder.Services.AddSingleton<IConectividad, ConectividadMaui>();
+        builder.Services.AddSingleton<ICompartir, CompartirMaui>();
 
         return builder.Build();
     }

@@ -34,9 +34,9 @@ fs.mkdirSync(SHOTS, { recursive: true });
 
   // ---- Producto nuevo ----
   await page.click('a:has-text("Productos")');
-  await page.waitForSelector('a:has-text("Nuevo producto")');
+  await page.waitForSelector('a[href="admin/productos/nuevo"]');
   await paso('21-productos');
-  await page.click('a:has-text("Nuevo producto")');
+  await page.click('a[href="admin/productos/nuevo"]');
   await page.fill('#nombre', `Producto E2E ${SUFIJO}`);
   await page.fill('#descripcion', 'Creado por la prueba automática');
   await page.fill('#precio', '1234.5');
@@ -49,7 +49,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await page.waitForSelector('h1:has-text("Editar producto")');
   await page.waitForSelector('text=Stock actual');
   await page.setInputFiles('input[type=file]', `${ESC}/producto.png`);
-  await page.waitForSelector('img.miniatura', { timeout: 20000 });
+  await page.waitForSelector('.miniatura img.producto-img', { timeout: 20000 });
   console.log('Imagen cargada visible: OK');
   await paso('23-producto-editar');
 
@@ -57,7 +57,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await page.fill('#ajuste', '-2');
   await page.fill('#motivo', 'Rotura E2E');
   await page.click('button:has-text("Aplicar ajuste")');
-  await page.waitForSelector('.insignia:has-text("3")');
+  await page.waitForSelector('.badge:has-text("Últimas 3")');
   await paso('24-ajuste-stock');
   await page.fill('#ajuste', '-50');
   await page.click('button:has-text("Aplicar ajuste")');
@@ -70,7 +70,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await page.selectOption('#proveedor', { index: 1 });
   await page.fill('input[type=search]', `Producto E2E ${SUFIJO}`);
   await page.press('input[type=search]', 'Enter');
-  await page.click(`button.fila:has-text("Producto E2E ${SUFIJO}")`);
+  await page.click(`button.list-group-item:has-text("Producto E2E ${SUFIJO}")`);
   await page.fill('input[min="1"]', '10');
   await page.fill('input[min="0.01"]', '500');
   await paso('26-compra-nueva');
@@ -81,19 +81,19 @@ fs.mkdirSync(SHOTS, { recursive: true });
 
   // ---- Movimientos ----
   await page.goto(WEB + '/admin/movimientos');
-  await page.waitForSelector(`.fila:has-text("Producto E2E ${SUFIJO}")`, { timeout: 30000 });
-  console.log('Movimientos de Producto E2E:', await page.locator(`.fila:has-text("Producto E2E ${SUFIJO}")`).count());
+  await page.waitForSelector(`li.list-group-item:has-text("Producto E2E ${SUFIJO}")`, { timeout: 30000 });
+  console.log('Movimientos de Producto E2E:', await page.locator(`li.list-group-item:has-text("Producto E2E ${SUFIJO}")`).count());
   await paso('28-movimientos');
 
   // ---- Ventas: anular la del cliente ----
   await page.goto(WEB + '/admin/ventas');
-  await page.waitForSelector('.fila', { timeout: 30000 });
+  await page.waitForSelector('li.list-group-item', { timeout: 30000 });
   await paso('29-ventas');
   if (await page.locator('button:has-text("Anular")').count() > 0) {
     await page.locator('button:has-text("Anular")').first().click();
-    await page.waitForSelector('.dialogo');
-    await page.click('.dialogo button:has-text("Anular")');
-    await page.waitForSelector('.etiqueta-peligro:has-text("Anulada")');
+    await page.waitForSelector('.modal.show');
+    await page.click('.modal.show .modal-footer button:has-text("Anular")');
+    await page.waitForSelector('.badge.text-bg-danger:has-text("Anulada")');
     await paso('30-venta-anulada');
   }
 
@@ -108,38 +108,38 @@ fs.mkdirSync(SHOTS, { recursive: true });
   }
   await page.fill('#correo', 'gerencia@ejemplo.com');
   await page.click('button:has-text("Enviar reporte")');
-  await page.waitForSelector('.alerta:has-text("SMTP")');
+  await page.waitForSelector('.alert:has-text("SMTP")');
   await paso('31-reportes');
 
   // ---- Usuarios y roles ----
   await page.goto(WEB + '/admin/usuarios');
   await page.waitForSelector('h2:has-text("Usuarios")', { timeout: 30000 });
-  await page.click('button:has-text("Nuevo usuario")');
+  await page.click('button:has-text("Nuevo")');
   await page.fill('#n-usuario', `op${SUFIJO}`);
   await page.fill('#n-email', `op${SUFIJO}@tienda.local`);
   await page.fill('#n-password', 'secreta1');
   await page.selectOption('#n-rol', 'Operador');
   await page.click('button:has-text("Crear usuario")');
-  await page.waitForSelector(`.tarjeta:has-text("op${SUFIJO}@tienda.local")`);
+  await page.waitForSelector(`.card:has-text("op${SUFIJO}@tienda.local")`);
   await paso('32-usuarios');
-  const tarjeta = page.locator('.tarjeta', { hasText: `op${SUFIJO}@tienda.local` });
+  const tarjeta = page.locator('.card', { hasText: `op${SUFIJO}@tienda.local` });
   await tarjeta.locator('input[type=checkbox]').uncheck();
   await tarjeta.locator('button:has-text("Guardar")').click();
-  await page.waitForSelector(`.tarjeta:has-text("op${SUFIJO}@tienda.local") .etiqueta-peligro:has-text("Inactivo")`);
+  await page.waitForSelector(`.card:has-text("op${SUFIJO}@tienda.local") .badge.text-bg-danger:has-text("Inactivo")`);
   console.log('Usuario desactivado: OK');
-  const propia = page.locator('.tarjeta', { hasText: 'admin@tienda.local' });
+  const propia = page.locator('.card', { hasText: 'admin@tienda.local' });
   await propia.locator('input[type=checkbox]').uncheck();
   await propia.locator('button:has-text("Guardar")').click();
-  await page.waitForSelector('.notificacion-error');
-  console.log('Auto-desactivación rechazada:', (await page.locator('.notificacion-error').first().innerText()));
+  await page.waitForSelector('.toast.text-bg-danger');
+  console.log('Auto-desactivación rechazada:', (await page.locator('.toast.text-bg-danger').first().innerText()));
   await paso('33-usuarios-error');
 
   // ---- Auditoría y errores ----
   await page.goto(WEB + '/admin/auditoria');
-  await page.waitForSelector('.fila', { timeout: 30000 });
+  await page.waitForSelector('li.list-group-item', { timeout: 30000 });
   await page.selectOption('#entidad', 'Productos');
   await page.click('button:has-text("Filtrar")');
-  await page.waitForSelector('.fila:has-text("admin · Crear")');
+  await page.waitForSelector('li.list-group-item:has-text("admin · Crear")');
   await paso('34-auditoria');
   await page.goto(WEB + '/admin/errores');
   await page.waitForSelector('h1:has-text("Registro de errores")');

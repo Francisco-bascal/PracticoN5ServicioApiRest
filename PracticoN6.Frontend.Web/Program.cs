@@ -19,5 +19,7 @@ builder.Services.AddTiendaShared(opciones => opciones.UrlApiPorDefecto = urlApi)
 builder.Services.AddScoped<IAlmacenamientoSeguro, AlmacenamientoNavegador>();
 builder.Services.AddScoped<IPreferencias, AlmacenamientoNavegador>();
 builder.Services.AddScoped<IGestorArchivos, GestorArchivosNavegador>();
+builder.Services.AddScoped<IConectividad, ConectividadNavegador>();
+builder.Services.AddScoped<ICompartir, CompartirNavegador>();
 
 await builder.Build().RunAsync();

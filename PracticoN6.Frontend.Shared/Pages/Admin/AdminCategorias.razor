@@ -4,60 +4,63 @@
 @inject SesionService Sesion
 @inject NotificacionesService Notificaciones
 
-<div class="pagina">
-    <h1>Categorías</h1>
+<div class="container-md pagina-formulario py-3">
+    <EncabezadoPagina Titulo="Categorías" Icono="tags" />
 
-    <div class="tarjeta">
-        <h3>@(_editandoId == null ? "Nueva categoría" : "Editar categoría")</h3>
-        <EditForm Model="_formulario" OnValidSubmit="Guardar">
-            <DataAnnotationsValidator />
-            <div class="campo">
-                <label for="nombre">Nombre</label>
-                <InputText id="nombre" @bind-Value="_formulario.Nombre" />
-                <ValidationMessage For="() => _formulario.Nombre" />
-            </div>
-            <div class="campo">
-                <label for="descripcion">Descripción (opcional)</label>
-                <InputText id="descripcion" @bind-Value="_formulario.Descripcion" />
-            </div>
-            @if (_error != null)
-            {
-                <Alerta Tipo="error">@_error</Alerta>
-            }
-            <div class="acciones">
-                <button class="btn btn-primario" type="submit" disabled="@_guardando">@(_editandoId == null ? "Agregar" : "Guardar")</button>
-                @if (_editandoId != null)
+    <section class="card shadow-sm mb-3" aria-labelledby="form-titulo">
+        <div class="card-body">
+            <h2 class="h5" id="form-titulo">@(_editandoId == null ? "Nueva categoría" : "Editar categoría")</h2>
+            <EditForm Model="_formulario" OnValidSubmit="Guardar">
+                <ValidacionBootstrap />
+                <div class="mb-3">
+                    <label for="nombre" class="form-label">Nombre</label>
+                    <InputText id="nombre" class="form-control" @bind-Value="_formulario.Nombre" />
+                    <ValidationMessage For="() => _formulario.Nombre" />
+                </div>
+                <div class="mb-3">
+                    <label for="descripcion" class="form-label">Descripción (opcional)</label>
+                    <InputText id="descripcion" class="form-control" @bind-Value="_formulario.Descripcion" />
+                </div>
+                @if (_error != null)
                 {
-                    <button class="btn btn-secundario" type="button" @onclick="CancelarEdicion">Cancelar</button>
+                    <Alerta Tipo="error">@_error</Alerta>
                 }
-            </div>
-        </EditForm>
-    </div>
-
-    @if (_categorias == null)
-    {
-        <Cargando />
-    }
-    else
-    {
-        @foreach (var categoria in _categorias)
-        {
-            <div class="fila">
-                <div class="fila-cuerpo">
-                    <div class="fila-titulo">@categoria.Nombre</div>
-                    @if (!string.IsNullOrWhiteSpace(categoria.Descripcion))
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary flex-grow-1" type="submit" disabled="@_guardando">@(_editandoId == null ? "Agregar" : "Guardar")</button>
+                    @if (_editandoId != null)
                     {
-                        <div class="fila-detalle">@categoria.Descripcion</div>
+                        <button class="btn btn-outline-secondary" type="button" @onclick="CancelarEdicion">Cancelar</button>
                     }
                 </div>
-                <button class="btn btn-secundario btn-chico" @onclick="() => Editar(categoria)">Editar</button>
-                @if (Sesion.EsAdministrador)
-                {
-                    <button class="btn btn-peligro btn-chico" @onclick="() => _porEliminar = categoria">Eliminar</button>
-                }
-            </div>
-        }
-    }
+            </EditForm>
+        </div>
+    </section>
+
+    <EstadoVista Cargando="_categorias == null" Vacio="_categorias?.Count == 0" IconoVacio="tags" MensajeVacio="Todavía no hay categorías.">
+        <ul class="list-group shadow-sm">
+            @foreach (var categoria in _categorias!)
+            {
+                <li class="list-group-item d-flex align-items-center gap-2" @key="categoria.CategoriaId">
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="fw-semibold">@categoria.Nombre</div>
+                        @if (!string.IsNullOrWhiteSpace(categoria.Descripcion))
+                        {
+                            <div class="small text-body-secondary">@categoria.Descripcion</div>
+                        }
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="Editar @categoria.Nombre" @onclick="() => Editar(categoria)">
+                        <i class="bi bi-pencil" aria-hidden="true"></i> Editar
+                    </button>
+                    @if (Sesion.EsAdministrador)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-danger" aria-label="Eliminar @categoria.Nombre" @onclick="() => _porEliminar = categoria">
+                            <i class="bi bi-trash3" aria-hidden="true"></i> Eliminar
+                        </button>
+                    }
+                </li>
+            }
+        </ul>
+    </EstadoVista>
 </div>
 
 <DialogoConfirmacion Visible="_porEliminar != null" Titulo="Eliminar categoría" Peligro="true" TextoConfirmar="Eliminar"

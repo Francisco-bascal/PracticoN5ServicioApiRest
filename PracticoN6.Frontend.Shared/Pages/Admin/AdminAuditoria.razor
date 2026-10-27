@@ -2,71 +2,65 @@
 @attribute [Authorize(Roles = Roles.Administrador)]
 @inject TiendaApi Tienda
 
-<div class="pagina">
-    <h1>Auditoría</h1>
-    <p class="suave">Quién hizo qué y cuándo: altas, cambios, bajas, anulaciones, inicios de sesión y reportes.</p>
+<div class="container-md py-3">
+    <EncabezadoPagina Titulo="Auditoría" Icono="journal-text"
+                      Subtitulo="Quién hizo qué y cuándo: altas, cambios, bajas, anulaciones, inicios de sesión y reportes." />
 
-    <div class="fila-campos">
-        <div class="campo">
-            <label for="desde">Desde</label>
-            <input id="desde" type="date" @bind="_desde" @bind:format="yyyy-MM-dd" />
-        </div>
-        <div class="campo">
-            <label for="hasta">Hasta</label>
-            <input id="hasta" type="date" @bind="_hasta" @bind:format="yyyy-MM-dd" />
-        </div>
-    </div>
-    <div class="fila-campos">
-        <div class="campo">
-            <label for="usuario">Usuario</label>
-            <input id="usuario" autocapitalize="none" placeholder="Todos" @bind="_usuario" />
-        </div>
-        <div class="campo">
-            <label for="entidad">Recurso</label>
-            <select id="entidad" @bind="_entidad">
-                <option value="">Todos</option>
-                @foreach (var entidad in Entidades)
-                {
-                    <option value="@entidad">@entidad</option>
-                }
-            </select>
-        </div>
-    </div>
-    <button class="btn btn-primario btn-bloque" @onclick="Filtrar">Filtrar</button>
-
-    @if (_error != null)
-    {
-        <Alerta Tipo="error">@_error</Alerta>
-    }
-    else if (_pagina == null)
-    {
-        <Cargando />
-    }
-    else if (_pagina.Elementos.Count == 0)
-    {
-        <div class="vacio"><div class="vacio-icono">🕵️</div><p>No hay registros para esos filtros.</p></div>
-    }
-    else
-    {
-        <p class="pequeno suave" style="margin-top:14px">@_pagina.TotalElementos registros</p>
-
-        @foreach (var registro in _pagina.Elementos)
-        {
-            <div class="fila" style="align-items:flex-start">
-                <div class="fila-cuerpo">
-                    <div class="fila-titulo">@registro.Usuario · @registro.Accion</div>
-                    <div class="fila-detalle">@Formato.FechaHora(registro.Fecha) · @registro.Entidad@(registro.EntidadId != null ? $" #{registro.EntidadId}" : "")</div>
-                    @if (!string.IsNullOrWhiteSpace(registro.Detalle))
-                    {
-                        <div class="fila-detalle">@registro.Detalle</div>
-                    }
+    <form class="card shadow-sm mb-3" @onsubmit="Filtrar" @onsubmit:preventDefault>
+        <div class="card-body">
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <label for="desde" class="form-label">Desde</label>
+                    <input id="desde" type="date" class="form-control" @bind="_desde" @bind:format="yyyy-MM-dd" />
                 </div>
-                <span class="etiqueta @ClaseCodigo(registro.CodigoRespuesta)">@registro.CodigoRespuesta</span>
+                <div class="col-6">
+                    <label for="hasta" class="form-label">Hasta</label>
+                    <input id="hasta" type="date" class="form-control" @bind="_hasta" @bind:format="yyyy-MM-dd" />
+                </div>
             </div>
-        }
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <label for="usuario" class="form-label">Usuario</label>
+                    <input id="usuario" class="form-control" autocapitalize="none" placeholder="Todos" @bind="_usuario" />
+                </div>
+                <div class="col-6">
+                    <label for="entidad" class="form-label">Recurso</label>
+                    <select id="entidad" class="form-select" @bind="_entidad">
+                        <option value="">Todos</option>
+                        @foreach (var entidad in Entidades)
+                        {
+                            <option value="@entidad">@entidad</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel me-1" aria-hidden="true"></i>Filtrar</button>
+        </div>
+    </form>
+
+    <EstadoVista Cargando="_pagina == null" Error="@_error" Vacio="_pagina?.Elementos.Count == 0" Reintentar="Cargar"
+                 IconoVacio="journal-text" MensajeVacio="No hay registros para esos filtros.">
+        <p class="small text-body-secondary mb-2">@_pagina!.TotalElementos @(_pagina.TotalElementos == 1 ? "registro" : "registros")</p>
+
+        <ul class="list-group shadow-sm">
+            @foreach (var registro in _pagina.Elementos)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-start gap-2" @key="registro.RegistroAuditoriaId">
+                    <div class="min-w-0">
+                        <div class="fw-semibold">@registro.Usuario · @registro.Accion</div>
+                        <div class="small text-body-secondary">@Formato.FechaHora(registro.Fecha) · @registro.Entidad@(registro.EntidadId != null ? $" #{registro.EntidadId}" : "")</div>
+                        @if (!string.IsNullOrWhiteSpace(registro.Detalle))
+                        {
+                            <div class="small text-body-secondary text-break">@registro.Detalle</div>
+                        }
+                    </div>
+                    <span class="badge flex-shrink-0 @ClaseCodigo(registro.CodigoRespuesta)">@registro.CodigoRespuesta</span>
+                </li>
+            }
+        </ul>
 
         <Paginador Pagina="_numero" TotalPaginas="_pagina.TotalPaginas" PaginaCambiada="IrAPagina" />
-    }
+    </EstadoVista>
 </div>
 
 @code {
@@ -93,9 +87,9 @@
 
     private static string ClaseCodigo(int codigo) => codigo switch
     {
-        >= 500 => "etiqueta-peligro",
-        >= 400 => "etiqueta-aviso",
-        _ => "etiqueta-ok"
+        >= 500 => "text-bg-danger",
+        >= 400 => "text-bg-warning",
+        _ => "text-bg-success"
     };
 
     private async Task Cargar()

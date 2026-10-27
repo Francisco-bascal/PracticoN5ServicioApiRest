@@ -28,3 +28,29 @@ window.tiendaAlmacen = {
     guardar: (clave, valor) => window.localStorage.setItem(clave, valor),
     eliminar: clave => window.localStorage.removeItem(clave)
 };
+
+// Estado de la red del navegador (host web). Devuelve el estado actual y avisa a .NET de cada cambio.
+window.tiendaConectividad = {
+    suscribir: function (referencia) {
+        const avisar = () => referencia.invokeMethodAsync('Notificar', navigator.onLine);
+        window.addEventListener('online', avisar);
+        window.addEventListener('offline', avisar);
+        return navigator.onLine;
+    }
+};
+
+// Comparte texto con la hoja de compartir del navegador o, si no existe, lo copia al portapapeles.
+// Devuelve true si se compartió y false si solo se copió.
+window.tiendaCompartir = async function (titulo, texto) {
+    if (navigator.share) {
+        try {
+            await navigator.share({ title: titulo, text: texto });
+        } catch (e) {
+            if (e.name !== 'AbortError') throw e;   // cerrar la hoja sin elegir nada no es un error
+        }
+        return true;
+    }
+
+    await navigator.clipboard.writeText(titulo + '\n' + texto);
+    return false;
+};

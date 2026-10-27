@@ -4,70 +4,73 @@
 @inject SesionService Sesion
 @inject NotificacionesService Notificaciones
 
-<div class="pagina">
-    <h1>Proveedores</h1>
+<div class="container-md pagina-formulario py-3">
+    <EncabezadoPagina Titulo="Proveedores" Icono="building" />
 
-    <div class="tarjeta">
-        <h3>@(_editandoId == null ? "Nuevo proveedor" : "Editar proveedor")</h3>
-        <EditForm Model="_formulario" OnValidSubmit="Guardar">
-            <DataAnnotationsValidator />
-            <div class="campo">
-                <label for="nombre">Nombre</label>
-                <InputText id="nombre" @bind-Value="_formulario.Nombre" />
-                <ValidationMessage For="() => _formulario.Nombre" />
-            </div>
-            <div class="fila-campos">
-                <div class="campo">
-                    <label for="telefono">Teléfono</label>
-                    <InputText id="telefono" type="tel" @bind-Value="_formulario.Telefono" />
-                    <ValidationMessage For="() => _formulario.Telefono" />
+    <section class="card shadow-sm mb-3" aria-labelledby="form-titulo">
+        <div class="card-body">
+            <h2 class="h5" id="form-titulo">@(_editandoId == null ? "Nuevo proveedor" : "Editar proveedor")</h2>
+            <EditForm Model="_formulario" OnValidSubmit="Guardar">
+                <ValidacionBootstrap />
+                <div class="mb-3">
+                    <label for="nombre" class="form-label">Nombre</label>
+                    <InputText id="nombre" class="form-control" @bind-Value="_formulario.Nombre" />
+                    <ValidationMessage For="() => _formulario.Nombre" />
                 </div>
-                <div class="campo">
-                    <label for="email">Correo</label>
-                    <InputText id="email" type="email" @bind-Value="_formulario.Email" />
-                    <ValidationMessage For="() => _formulario.Email" />
+                <div class="row g-2 mb-3">
+                    <div class="col-12 col-sm-6">
+                        <label for="telefono" class="form-label">Teléfono</label>
+                        <InputText id="telefono" type="tel" class="form-control" @bind-Value="_formulario.Telefono" inputmode="tel" />
+                        <ValidationMessage For="() => _formulario.Telefono" />
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <label for="email" class="form-label">Correo</label>
+                        <InputText id="email" type="email" class="form-control" @bind-Value="_formulario.Email" inputmode="email" autocapitalize="none" />
+                        <ValidationMessage For="() => _formulario.Email" />
+                    </div>
                 </div>
-            </div>
-            <div class="campo">
-                <label for="direccion">Dirección</label>
-                <InputText id="direccion" @bind-Value="_formulario.Direccion" />
-                <ValidationMessage For="() => _formulario.Direccion" />
-            </div>
-            @if (_error != null)
+                <div class="mb-3">
+                    <label for="direccion" class="form-label">Dirección</label>
+                    <InputText id="direccion" class="form-control" @bind-Value="_formulario.Direccion" />
+                    <ValidationMessage For="() => _formulario.Direccion" />
+                </div>
+                @if (_error != null)
+                {
+                    <Alerta Tipo="error">@_error</Alerta>
+                }
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary flex-grow-1" type="submit" disabled="@_guardando">@(_editandoId == null ? "Agregar" : "Guardar")</button>
+                    @if (_editandoId != null)
+                    {
+                        <button class="btn btn-outline-secondary" type="button" @onclick="CancelarEdicion">Cancelar</button>
+                    }
+                </div>
+            </EditForm>
+        </div>
+    </section>
+
+    <EstadoVista Cargando="_proveedores == null" Vacio="_proveedores?.Count == 0" IconoVacio="building" MensajeVacio="Todavía no hay proveedores.">
+        <ul class="list-group shadow-sm">
+            @foreach (var proveedor in _proveedores!)
             {
-                <Alerta Tipo="error">@_error</Alerta>
+                <li class="list-group-item d-flex align-items-center gap-2" @key="proveedor.ProveedorId">
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="fw-semibold">@proveedor.Nombre</div>
+                        <div class="small text-body-secondary text-break">@string.Join(" · ", new[] { proveedor.Telefono, proveedor.Email, proveedor.Direccion }.Where(x => !string.IsNullOrWhiteSpace(x)))</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="Editar @proveedor.Nombre" @onclick="() => Editar(proveedor)">
+                        <i class="bi bi-pencil" aria-hidden="true"></i> Editar
+                    </button>
+                    @if (Sesion.EsAdministrador)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-danger" aria-label="Eliminar @proveedor.Nombre" @onclick="() => _porEliminar = proveedor">
+                            <i class="bi bi-trash3" aria-hidden="true"></i> Eliminar
+                        </button>
+                    }
+                </li>
             }
-            <div class="acciones">
-                <button class="btn btn-primario" type="submit" disabled="@_guardando">@(_editandoId == null ? "Agregar" : "Guardar")</button>
-                @if (_editandoId != null)
-                {
-                    <button class="btn btn-secundario" type="button" @onclick="CancelarEdicion">Cancelar</button>
-                }
-            </div>
-        </EditForm>
-    </div>
-
-    @if (_proveedores == null)
-    {
-        <Cargando />
-    }
-    else
-    {
-        @foreach (var proveedor in _proveedores)
-        {
-            <div class="fila">
-                <div class="fila-cuerpo">
-                    <div class="fila-titulo">@proveedor.Nombre</div>
-                    <div class="fila-detalle">@string.Join(" · ", new[] { proveedor.Telefono, proveedor.Email, proveedor.Direccion }.Where(x => !string.IsNullOrWhiteSpace(x)))</div>
-                </div>
-                <button class="btn btn-secundario btn-chico" @onclick="() => Editar(proveedor)">Editar</button>
-                @if (Sesion.EsAdministrador)
-                {
-                    <button class="btn btn-peligro btn-chico" @onclick="() => _porEliminar = proveedor">Eliminar</button>
-                }
-            </div>
-        }
-    }
+        </ul>
+    </EstadoVista>
 </div>
 
 <DialogoConfirmacion Visible="_porEliminar != null" Titulo="Eliminar proveedor" Peligro="true" TextoConfirmar="Eliminar"

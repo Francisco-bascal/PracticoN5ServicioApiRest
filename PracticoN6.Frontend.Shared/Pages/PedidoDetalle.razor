@@ -5,48 +5,53 @@
 @inject IGestorArchivos Archivos
 @inject NotificacionesService Notificaciones
 
-<div class="pagina">
-    @if (_error != null)
-    {
-        <Alerta Tipo="error">@_error</Alerta>
-    }
-    else if (_pedido == null)
-    {
-        <Cargando />
-    }
-    else
-    {
+<div class="container-md py-3">
+    <EstadoVista Cargando="_pedido == null" Error="@_error" Reintentar="CargarAsync">
         @if (Nuevo)
         {
             <Alerta Tipo="exito"><strong>¡Compra realizada!</strong> Su pago fue aprobado.</Alerta>
         }
 
-        <h1>Pedido N° @_pedido.VentaId @if (_pedido.Anulada){<span class="etiqueta etiqueta-peligro">Anulado</span>}</h1>
-        <p class="suave">@Formato.FechaHora(_pedido.Fecha) · @_pedido.Cliente</p>
+        <EncabezadoPagina Titulo="@($"Pedido N° {_pedido!.VentaId}")" Subtitulo="@($"{Formato.FechaHora(_pedido.Fecha)} · {_pedido.Cliente}")">
+            <Acciones>
+                @if (_pedido.Anulada)
+                {
+                    <span class="badge text-bg-danger">Anulado</span>
+                }
+            </Acciones>
+        </EncabezadoPagina>
 
-        @foreach (var item in _pedido.Items)
-        {
-            <div class="fila">
-                <div class="fila-cuerpo">
-                    <div class="fila-titulo">@item.Producto</div>
-                    <div class="fila-detalle">@item.Cantidad × @Formato.Dinero(item.PrecioUnitario)</div>
-                </div>
-                <div class="fila-derecha fila-titulo">@Formato.Dinero(item.Subtotal)</div>
-            </div>
-        }
-
-        <div class="total"><span>Total</span><span>@Formato.Dinero(_pedido.Total)</span></div>
+        <ul class="list-group shadow-sm mb-3">
+            @foreach (var item in _pedido.Items)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center gap-2" @key="item.ProductoId">
+                    <div>
+                        <div class="fw-semibold">@item.Producto</div>
+                        <div class="small text-body-secondary">@item.Cantidad × @Formato.Dinero(item.PrecioUnitario)</div>
+                    </div>
+                    <div class="fw-bold text-nowrap">@Formato.Dinero(item.Subtotal)</div>
+                </li>
+            }
+            <li class="list-group-item d-flex justify-content-between fs-5 fw-bold">
+                <span>Total</span>
+                <span>@Formato.Dinero(_pedido.Total)</span>
+            </li>
+        </ul>
 
         @if (_pedido.MedioPago != null)
         {
-            <p class="suave">Pagado con <strong>@_pedido.MedioPago</strong> · código de autorización <strong>@_pedido.CodigoAutorizacion</strong></p>
+            <p class="text-body-secondary">
+                <i class="bi bi-patch-check me-1" aria-hidden="true"></i>
+                Pagado con <strong>@_pedido.MedioPago</strong> · código de autorización <strong>@_pedido.CodigoAutorizacion</strong>
+            </p>
         }
 
         @if (Sesion.EsPersonal)
         {
-            <div class="campo">
-                <label for="destino">Enviar a (opcional)</label>
-                <input id="destino" type="email" placeholder="Si lo deja vacío se envía a su correo" @bind="_destinatario" />
+            <div class="mb-3">
+                <label for="destino" class="form-label">Enviar a (opcional)</label>
+                <input id="destino" type="email" class="form-control" inputmode="email" autocapitalize="none"
+                       placeholder="Si lo deja vacío se envía a su correo" @bind="_destinatario" />
             </div>
         }
 
@@ -60,11 +65,15 @@
             <Alerta Tipo="error">@_errorAccion</Alerta>
         }
 
-        <div class="acciones">
-            <button class="btn btn-secundario" disabled="@_ocupado" @onclick="VerComprobante">📄 Comprobante PDF</button>
-            <button class="btn btn-primario" disabled="@_ocupado" @onclick="Enviar">✉️ Enviar por correo</button>
+        <div class="d-grid gap-2 d-sm-flex">
+            <button type="button" class="btn btn-outline-primary btn-lg flex-fill" disabled="@_ocupado" @onclick="VerComprobante">
+                <i class="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>Comprobante PDF
+            </button>
+            <button type="button" class="btn btn-primary btn-lg flex-fill" disabled="@_ocupado" @onclick="Enviar">
+                <i class="bi bi-envelope me-1" aria-hidden="true"></i>Enviar por correo
+            </button>
         </div>
-    }
+    </EstadoVista>
 </div>
 
 @code {
@@ -78,7 +87,9 @@
     private string? _destinatario;
     private bool _ocupado;
 
-    protected override async Task OnParametersSetAsync()
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
     {
         _pedido = null;
         _error = null;

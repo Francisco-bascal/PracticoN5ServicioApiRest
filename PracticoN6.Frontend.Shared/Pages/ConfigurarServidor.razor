@@ -3,16 +3,18 @@
 @inject ServidorApi Servidor
 @inject TiendaApi Tienda
 
-<div class="pagina pagina-angosta">
-    <h1>Servidor</h1>
-    <p class="suave">
-        Dirección de la API a la que se conecta la aplicación. En el emulador de Android la computadora
-        es <strong>10.0.2.2</strong>; desde un teléfono real use la IP de la computadora en la red (por ejemplo 192.168.0.10).
-    </p>
+<div class="container pagina-angosta py-4">
+    <EncabezadoPagina Titulo="Servidor" Icono="hdd-network" Subtitulo="Dirección de la API a la que se conecta la aplicación." />
 
-    <div class="campo">
-        <label for="url">Dirección de la API</label>
-        <input id="url" @bind="_url" @bind:event="oninput" inputmode="url" autocapitalize="none" autocomplete="off" placeholder="http://10.0.2.2:5276" />
+    <Alerta Tipo="info">
+        En el emulador de Android la computadora es <strong>10.0.2.2</strong>; desde un teléfono real use la IP de la
+        computadora en la red (por ejemplo 192.168.0.10).
+    </Alerta>
+
+    <div class="mb-3">
+        <label for="url" class="form-label">Dirección de la API</label>
+        <input id="url" class="form-control form-control-lg" @bind="_url" @bind:event="oninput" inputmode="url"
+               autocapitalize="none" autocomplete="off" placeholder="http://10.0.2.2:5276" />
     </div>
 
     @if (_mensaje != null)
@@ -20,11 +22,17 @@
         <Alerta Tipo="@(_exito ? "exito" : "error")">@_mensaje</Alerta>
     }
 
-    <div class="acciones">
-        <button class="btn btn-primario" disabled="@_ocupado" @onclick="GuardarYProbar">@(_ocupado ? "Probando..." : "Guardar y probar")</button>
-        <button class="btn btn-secundario" disabled="@_ocupado" @onclick="Restablecer">Restablecer</button>
+    <div class="d-grid gap-2">
+        <button type="button" class="btn btn-primary btn-lg" disabled="@_ocupado" @onclick="GuardarYProbar">
+            @if (_ocupado)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+            }
+            @(_ocupado ? "Probando..." : "Guardar y probar")
+        </button>
+        <button type="button" class="btn btn-outline-secondary" disabled="@_ocupado" @onclick="Restablecer">Restablecer</button>
     </div>
-    <p class="pequeno suave">Predeterminada: @Servidor.UrlPorDefecto</p>
+    <p class="small text-body-secondary mt-3">Predeterminada: @Servidor.UrlPorDefecto</p>
 </div>
 
 @code {

@@ -4,13 +4,13 @@
 @inject IGestorArchivos Archivos
 @inject NotificacionesService Notificaciones
 
-<div class="pagina">
-    <h1>Reportes PDF</h1>
-    <p class="suave">Genere un reporte para verlo, guardarlo o enviarlo por correo.</p>
+<div class="container-md pagina-formulario py-3">
+    <EncabezadoPagina Titulo="Reportes PDF" Icono="file-earmark-bar-graph"
+                      Subtitulo="Genere un reporte para verlo, guardarlo o enviarlo por correo." />
 
-    <div class="campo">
-        <label for="tipo">Reporte</label>
-        <select id="tipo" @bind="_tipo">
+    <div class="mb-3">
+        <label for="tipo" class="form-label">Reporte</label>
+        <select id="tipo" class="form-select form-select-lg" @bind="_tipo">
             <option value="stock">Stock actual (inventario valorizado)</option>
             <option value="entradas">Entradas de mercadería (compras)</option>
             <option value="salidas">Salidas de mercadería (ventas)</option>
@@ -20,28 +20,48 @@
 
     @if (UsaPeriodo)
     {
-        <div class="fila-campos">
-            <div class="campo">
-                <label for="desde">Desde</label>
-                <input id="desde" type="date" @bind="_desde" @bind:format="yyyy-MM-dd" />
+        <div class="row g-2 mb-3">
+            <div class="col-6">
+                <label for="desde" class="form-label">Desde</label>
+                <input id="desde" type="date" class="form-control" @bind="_desde" @bind:format="yyyy-MM-dd" />
             </div>
-            <div class="campo">
-                <label for="hasta">Hasta</label>
-                <input id="hasta" type="date" @bind="_hasta" @bind:format="yyyy-MM-dd" />
+            <div class="col-6">
+                <label for="hasta" class="form-label">Hasta</label>
+                <input id="hasta" type="date" class="form-control" @bind="_hasta" @bind:format="yyyy-MM-dd" />
             </div>
         </div>
     }
 
-    <div class="acciones">
-        <button class="btn btn-primario" disabled="@_ocupado" @onclick="Ver">@(_ocupado == "ver" ? "Generando..." : "📄 Ver / guardar PDF")</button>
-    </div>
+    <button type="button" class="btn btn-primary btn-lg w-100" disabled="@(_ocupado != null)" @onclick="Ver">
+        @if (_ocupado == "ver")
+        {
+            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+        }
+        else
+        {
+            <i class="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>
+        }
+        @(_ocupado == "ver" ? "Generando..." : "Ver / guardar PDF")
+    </button>
 
-    <h2>Enviar por correo</h2>
-    <div class="campo">
-        <label for="correo">Destinatario</label>
-        <input id="correo" type="email" inputmode="email" autocapitalize="none" placeholder="correo@ejemplo.com" @bind="_correo" />
+    <hr class="my-4" />
+
+    <h2 class="h5">Enviar por correo</h2>
+    <div class="mb-3">
+        <label for="correo" class="form-label">Destinatario</label>
+        <input id="correo" type="email" class="form-control" inputmode="email" autocapitalize="none" placeholder="correo@ejemplo.com" @bind="_correo" />
     </div>
-    <button class="btn btn-secundario btn-bloque" disabled="@(_ocupado != null)" @onclick="Enviar">@(_ocupado == "enviar" ? "Enviando..." : "✉️ Enviar reporte")</button>
+    <button type="button" class="btn btn-outline-primary w-100" disabled="@(_ocupado != null)" @onclick="Enviar">
+        @if (_ocupado == "enviar")
+        {
+            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+        }
+        else
+        {
+            <i class="bi bi-envelope me-1" aria-hidden="true"></i>
+        }
+        @(_ocupado == "enviar" ? "Enviando..." : "Enviar reporte")
+    </button>
 
     @if (_resultado != null)
     {

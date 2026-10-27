@@ -4,53 +4,53 @@
 @inject SesionService Sesion
 @inject NavigationManager Navegacion
 
-<div class="pagina pagina-angosta">
-    <h1>Crear cuenta</h1>
-    <p class="suave">Con su cuenta podrá comprar y ver el historial de sus pedidos.</p>
+<div class="container pagina-angosta py-4">
+    <EncabezadoPagina Titulo="Crear cuenta" Icono="person-plus" Subtitulo="Con su cuenta podrá comprar y ver el historial de sus pedidos." />
 
     <EditForm Model="_formulario" OnValidSubmit="Registrarse">
-        <DataAnnotationsValidator />
+        <ValidacionBootstrap />
 
-        <div class="campo">
-            <label for="usuario">Usuario</label>
-            <InputText id="usuario" @bind-Value="_formulario.NombreUsuario" autocomplete="username" autocapitalize="none" />
+        <div class="mb-3">
+            <label for="usuario" class="form-label">Usuario</label>
+            <InputText id="usuario" class="form-control form-control-lg" @bind-Value="_formulario.NombreUsuario" autocomplete="username" autocapitalize="none" />
             <ValidationMessage For="() => _formulario.NombreUsuario" />
         </div>
-        <div class="campo">
-            <label for="email">Correo electrónico</label>
-            <InputText id="email" type="email" @bind-Value="_formulario.Email" autocomplete="email" />
+        <div class="mb-3">
+            <label for="email" class="form-label">Correo electrónico</label>
+            <InputText id="email" type="email" class="form-control form-control-lg" @bind-Value="_formulario.Email" autocomplete="email" inputmode="email" />
             <ValidationMessage For="() => _formulario.Email" />
         </div>
-        <div class="campo">
-            <label for="password">Contraseña</label>
-            <InputText id="password" type="password" @bind-Value="_formulario.Password" autocomplete="new-password" />
+        <div class="mb-3">
+            <label for="password" class="form-label">Contraseña</label>
+            <EntradaPassword Id="password" @bind-Value="_formulario.Password" Autocomplete="new-password" />
+            <div class="form-text">Al menos 6 caracteres.</div>
             <ValidationMessage For="() => _formulario.Password" />
         </div>
-        <div class="campo">
-            <label for="confirmar">Repetir contraseña</label>
-            <InputText id="confirmar" type="password" @bind-Value="_formulario.ConfirmarPassword" autocomplete="new-password" />
+        <div class="mb-3">
+            <label for="confirmar" class="form-label">Repetir contraseña</label>
+            <EntradaPassword Id="confirmar" @bind-Value="_formulario.ConfirmarPassword" Autocomplete="new-password" />
             <ValidationMessage For="() => _formulario.ConfirmarPassword" />
         </div>
 
-        <h2>Sus datos (opcional)</h2>
-        <div class="fila-campos">
-            <div class="campo">
-                <label for="nombre">Nombre</label>
-                <InputText id="nombre" @bind-Value="_formulario.Nombre" autocomplete="given-name" />
+        <h2 class="h5 mt-4">Sus datos <span class="text-body-secondary fw-normal">(opcional)</span></h2>
+        <div class="row g-2 mb-3">
+            <div class="col-6">
+                <label for="nombre" class="form-label">Nombre</label>
+                <InputText id="nombre" class="form-control" @bind-Value="_formulario.Nombre" autocomplete="given-name" />
                 <ValidationMessage For="() => _formulario.Nombre" />
             </div>
-            <div class="campo">
-                <label for="apellido">Apellido</label>
-                <InputText id="apellido" @bind-Value="_formulario.Apellido" autocomplete="family-name" />
+            <div class="col-6">
+                <label for="apellido" class="form-label">Apellido</label>
+                <InputText id="apellido" class="form-control" @bind-Value="_formulario.Apellido" autocomplete="family-name" />
             </div>
         </div>
-        <div class="campo">
-            <label for="telefono">Teléfono</label>
-            <InputText id="telefono" type="tel" @bind-Value="_formulario.Telefono" autocomplete="tel" />
+        <div class="mb-3">
+            <label for="telefono" class="form-label">Teléfono</label>
+            <InputText id="telefono" type="tel" class="form-control" @bind-Value="_formulario.Telefono" autocomplete="tel" inputmode="tel" />
         </div>
-        <div class="campo">
-            <label for="direccion">Dirección</label>
-            <InputText id="direccion" @bind-Value="_formulario.Direccion" autocomplete="street-address" />
+        <div class="mb-3">
+            <label for="direccion" class="form-label">Dirección</label>
+            <InputText id="direccion" class="form-control" @bind-Value="_formulario.Direccion" autocomplete="street-address" />
         </div>
 
         @if (_error != null)
@@ -58,12 +58,16 @@
             <Alerta Tipo="error">@_error</Alerta>
         }
 
-        <button class="btn btn-primario btn-bloque" type="submit" disabled="@_enviando">
+        <button class="btn btn-primary btn-lg w-100" type="submit" disabled="@_enviando">
+            @if (_enviando)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+            }
             @(_enviando ? "Creando cuenta..." : "Crear cuenta")
         </button>
     </EditForm>
 
-    <p class="centrado" style="margin-top:16px">¿Ya tiene cuenta? <a href="login">Inicie sesión</a></p>
+    <p class="text-center mt-3">¿Ya tiene cuenta? <a href="login">Inicie sesión</a></p>
 </div>
 
 @code {

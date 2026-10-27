@@ -13,7 +13,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
 
 (async () => {
   const browser = await chromium.launch();
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, acceptDownloads: true });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await context.newPage();
   const problemas = [];
   page.on('console', m => { if (['error', 'warning'].includes(m.type())) problemas.push(`[${m.type()}] ${m.text()}`); });
@@ -30,14 +30,14 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await page.click('a:has-text("Servidor:")');
   await page.waitForSelector('h1:has-text("Servidor")');
   await page.click('button:has-text("Guardar y probar")');
-  await page.waitForSelector('.alerta-exito:has-text("Conexión correcta")');
+  await page.waitForSelector('.alert-success:has-text("Conexión correcta")');
   await paso('01b-servidor');
   await page.fill('#url', 'http://localhost:9');
   await page.click('button:has-text("Guardar y probar")');
-  await page.waitForSelector('.alerta-error:has-text("No se pudo conectar")');
+  await page.waitForSelector('.alert-danger:has-text("No se pudo conectar")');
   await paso('01c-servidor-error');
   await page.click('button:has-text("Restablecer")');
-  await page.waitForSelector('.alerta-exito:has-text("predeterminada")');
+  await page.waitForSelector('.alert-success:has-text("predeterminada")');
   await page.goto(WEB);
   await page.waitForSelector('text=Ingrese para ver el catálogo');
 
@@ -67,7 +67,12 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await page.fill('input[type=search]', '');
   await page.press('input[type=search]', 'Enter');
   await page.waitForTimeout(600);
-  await page.selectOption('select[aria-label="Ordenar por"]', 'precio_asc');
+  await page.click('button[aria-label="Ordenar y filtrar"]');
+  await page.waitForSelector('#orden');
+  await paso('05a-hoja-filtros');
+  await page.selectOption('#orden', 'precio_asc');
+  await page.click('.hoja-inferior button:has-text("Aplicar")');
+  await page.waitForSelector('.hoja-inferior', { state: 'detached' });
   await page.waitForTimeout(600);
   const primerPrecio = await page.locator('.tarjeta-producto .precio').first().innerText();
   console.log('Primer precio (asc):', primerPrecio);
@@ -77,16 +82,43 @@ fs.mkdirSync(SHOTS, { recursive: true });
   const sinStock = page.locator('.tarjeta-producto', { hasText: 'Teclado inalámbrico' });
   console.log('Teclado deshabilitado:', await sinStock.locator('button').isDisabled());
 
+  // "Solo productos con stock" oculta el que no tiene; "Limpiar" vuelve a mostrarlo.
+  await page.click('button[aria-label="Ordenar y filtrar"]');
+  await page.check('#solo-stock');
+  await page.click('.hoja-inferior button:has-text("Aplicar")');
+  await page.waitForSelector('.hoja-inferior', { state: 'detached' });
+  await page.waitForTimeout(600);
+  console.log('Sin stock oculto con el filtro (esperado 0):', await page.locator('.tarjeta-producto', { hasText: 'Teclado inalámbrico' }).count());
+  await page.click('button[aria-label="Ordenar y filtrar"]');
+  await page.click('.hoja-inferior button:has-text("Limpiar")');
+  await page.waitForSelector('.hoja-inferior', { state: 'detached' });
+  await page.waitForSelector('.tarjeta-producto:has-text("Teclado inalámbrico")');
+
+  // Sin red: aparece la franja de aviso y se va al volver la conexión.
+  await context.setOffline(true);
+  await page.waitForSelector('text=Sin conexión de red');
+  await paso('05b-sin-red');
+  await context.setOffline(false);
+  await page.waitForSelector('text=Sin conexión de red', { state: 'detached' });
+  console.log('Aviso de red: aparece y desaparece OK');
+
   // Detalle de producto
   await page.fill('input[type=search]', 'Auriculares');
   await page.press('input[type=search]', 'Enter');
   await page.waitForSelector('.tarjeta-titulo:has-text("Auriculares")');
-  await page.click('.tarjeta-enlace:has-text("Auriculares")');
+  await page.click('.tarjeta-producto a:has-text("Auriculares")');
   await page.waitForSelector('text=Agregar al carrito');
   await paso('06-detalle');
+
+  // Compartir: el navegador de pruebas no tiene hoja de compartir, así que copia al portapapeles.
+  await page.click('button[aria-label="Compartir producto"]');
+  await page.waitForSelector('.toast:has-text("portapapeles")');
+  const copiado = await page.evaluate(() => navigator.clipboard.readText());
+  console.log('Texto compartido:', JSON.stringify(copiado));
+  if (!copiado.includes('Auriculares')) throw new Error('El texto compartido no menciona el producto');
   await page.click('button[aria-label="Más"]');
   await page.click('button:has-text("Agregar al carrito")');
-  await page.waitForSelector('.notificacion');
+  await page.waitForSelector('.toast:has-text("carrito")');
   await paso('07-agregado');
 
   // Carrito
@@ -94,7 +126,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await page.waitForSelector('h1:has-text("Mi carrito")');
   await page.waitForSelector('text=Auriculares Bluetooth');
   await paso('08-carrito');
-  console.log('Total carrito:', await page.locator('.total').innerText());
+  console.log('Total carrito:', await page.locator('.sticky-bottom').innerText());
 
   // Checkout con tarjeta rechazada
   await page.click('button:has-text("Continuar con el pago")');
@@ -124,7 +156,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
 
   // Mis pedidos
   await page.click('.tab:has-text("Pedidos")');
-  await page.waitForSelector('.fila');
+  await page.waitForSelector('a.list-group-item');
   await paso('12-mis-pedidos');
 
   // Cuenta
@@ -147,6 +179,23 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await page.click('button:has-text("Cerrar sesión")');
   await page.waitForSelector('text=Ingrese para ver el catálogo');
   await paso('15-logout');
+
+  // Modo oscuro: sigue el del teléfono (prefers-color-scheme).
+  const oscuro = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, colorScheme: 'dark' });
+  const paginaOscura = await oscuro.newPage();
+  await paginaOscura.goto(WEB);
+  await paginaOscura.waitForSelector('#usuario', { timeout: 60000 });
+  await paginaOscura.screenshot({ path: `${SHOTS}/16-login-oscuro.png` });
+  await paginaOscura.fill('#usuario', 'cliente');
+  await paginaOscura.fill('#password', 'Demo1234');
+  await paginaOscura.click('button:has-text("Ingresar")');
+  await paginaOscura.waitForSelector('.grilla-productos');
+  await paginaOscura.waitForTimeout(500);
+  await paginaOscura.screenshot({ path: `${SHOTS}/17-catalogo-oscuro.png` });
+  const tema = await paginaOscura.evaluate(() => document.documentElement.getAttribute('data-bs-theme'));
+  console.log('Tema con el teléfono en modo oscuro:', tema);
+  if (tema !== 'dark') throw new Error('No se aplicó el modo oscuro');
+  await oscuro.close();
 
   console.log('\nProblemas de consola/red:', problemas.length);
   problemas.slice(0, 15).forEach(p => console.log('  ' + p));

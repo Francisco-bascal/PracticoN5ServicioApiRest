@@ -11,10 +11,11 @@
                     }
                     else
                     {
-                        <div class="pagina">
-                            <h1>Acceso restringido</h1>
+                        <div class="container-md py-4 text-center">
+                            <i class="bi bi-shield-lock display-3 text-danger" aria-hidden="true"></i>
+                            <h1 class="h4 mt-2">Acceso restringido</h1>
                             <Alerta Tipo="error">Su usuario no tiene permisos para ver esta pantalla.</Alerta>
-                            <a class="btn btn-primario" href="">Ir al catálogo</a>
+                            <a class="btn btn-primary" href="">Ir al catálogo</a>
                         </div>
                     }
                 </NotAuthorized>
@@ -26,10 +27,11 @@
         </Found>
         <NotFound>
             <LayoutView Layout="@typeof(MainLayout)">
-                <div class="pagina">
-                    <h1>Pantalla no encontrada</h1>
-                    <p>La dirección que buscaba no existe.</p>
-                    <a class="btn btn-primario" href="">Ir al catálogo</a>
+                <div class="container-md py-4 text-center">
+                    <i class="bi bi-compass display-3 text-body-secondary" aria-hidden="true"></i>
+                    <h1 class="h4 mt-2">Pantalla no encontrada</h1>
+                    <p class="text-body-secondary">La dirección que buscaba no existe.</p>
+                    <a class="btn btn-primary" href="">Ir al catálogo</a>
                 </div>
             </LayoutView>
         </NotFound>

@@ -3,67 +3,90 @@
 @inject TiendaApi Tienda
 @inject NotificacionesService Notificaciones
 
-<div class="pagina">
-    <form class="buscador" @onsubmit="Buscar" @onsubmit:preventDefault>
-        <input type="search" placeholder="Buscar productos" aria-label="Buscar productos" @bind="_busqueda" enterkeyhint="search" />
-        <button class="btn btn-primario" type="submit" aria-label="Buscar">🔍</button>
+<div class="container-md py-3">
+    <form class="input-group mb-2" role="search" @onsubmit="Buscar" @onsubmit:preventDefault>
+        <input type="search" class="form-control form-control-lg" placeholder="Buscar productos" aria-label="Buscar productos"
+               @bind="_busqueda" enterkeyhint="search" />
+        <button class="btn btn-primary" type="submit" aria-label="Buscar"><i class="bi bi-search" aria-hidden="true"></i></button>
+        <button class="btn btn-outline-primary position-relative" type="button" aria-label="Ordenar y filtrar" @onclick="AbrirFiltros">
+            <i class="bi bi-sliders" aria-hidden="true"></i>
+            @if (FiltrosActivos > 0)
+            {
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger">
+                    @FiltrosActivos<span class="visually-hidden"> filtros activos</span>
+                </span>
+            }
+        </button>
     </form>
 
-    <div class="chips" role="tablist" aria-label="Categorías">
-        <button class="chip @(_categoriaId == null ? "activo" : "")" @onclick="() => ElegirCategoria(null)">Todas</button>
+    <div class="d-flex gap-2 overflow-auto sin-scrollbar pb-2 mb-1" role="group" aria-label="Categorías">
+        <button type="button" class="btn btn-sm rounded-pill text-nowrap @(_categoriaId == null ? "btn-primary" : "btn-outline-secondary")"
+                aria-pressed="@(_categoriaId == null ? "true" : "false")" @onclick="() => ElegirCategoria(null)">Todas</button>
         @foreach (var categoria in _categorias)
         {
-            <button class="chip @(_categoriaId == categoria.CategoriaId ? "activo" : "")" @onclick="() => ElegirCategoria(categoria.CategoriaId)">@categoria.Nombre</button>
+            <button type="button" class="btn btn-sm rounded-pill text-nowrap @(_categoriaId == categoria.CategoriaId ? "btn-primary" : "btn-outline-secondary")"
+                    aria-pressed="@(_categoriaId == categoria.CategoriaId ? "true" : "false")" @key="categoria.CategoriaId"
+                    @onclick="() => ElegirCategoria(categoria.CategoriaId)">@categoria.Nombre</button>
         }
     </div>
 
-    <div class="filtros">
-        <select aria-label="Ordenar por" value="@_orden" @onchange="CambiarOrden">
-            <option value="nombre">Ordenar: Nombre</option>
-            <option value="precio_asc">Menor precio</option>
-            <option value="precio_desc">Mayor precio</option>
-            <option value="recientes">Más recientes</option>
-        </select>
-        <label class="casilla">
-            <input type="checkbox" checked="@_soloDisponibles" @onchange="CambiarDisponibles" /> Solo con stock
-        </label>
-    </div>
+    <EstadoVista Cargando="_cargando && _productos.Count == 0" Error="@_error" Vacio="!_cargando && _productos.Count == 0"
+                 TextoCarga="Cargando catálogo..." IconoVacio="search" MensajeVacio="No encontramos productos con esos filtros."
+                 Reintentar="IniciarAsync">
+        <p class="small text-body-secondary mb-2">@_total @(_total == 1 ? "producto" : "productos")</p>
 
-    @if (_error != null)
-    {
-        <Alerta Tipo="error">@_error</Alerta>
-        <button class="btn btn-secundario" @onclick="Recargar">Reintentar</button>
-    }
-    else if (_cargando && _productos.Count == 0)
-    {
-        <Cargando Texto="Cargando catálogo..." />
-    }
-    else if (_productos.Count == 0)
-    {
-        <div class="vacio">
-            <div class="vacio-icono">🔎</div>
-            <p>No encontramos productos con esos filtros.</p>
-        </div>
-    }
-    else
-    {
-        <p class="pequeno suave">@_total @(_total == 1 ? "producto" : "productos")</p>
-
-        <div class="grilla-productos">
+        <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-2 grilla-productos">
             @foreach (var producto in _productos)
             {
-                <TarjetaProducto Producto="producto" Agregado="AlAgregar" />
+                <TarjetaProducto Producto="producto" Agregado="AlAgregar" @key="producto.ProductoId" />
             }
         </div>
 
         @if (_productos.Count < _total)
         {
-            <div class="acciones">
-                <button class="btn btn-secundario" disabled="@_cargando" @onclick="VerMas">@(_cargando ? "Cargando..." : "Ver más productos")</button>
+            <div class="d-grid my-3">
+                <button type="button" class="btn btn-outline-primary" disabled="@_cargando" @onclick="VerMas">
+                    @if (_cargando)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                    }
+                    @(_cargando ? "Cargando..." : "Ver más productos")
+                </button>
             </div>
         }
-    }
+    </EstadoVista>
 </div>
+
+@* Hoja inferior para ordenar y filtrar (offcanvas de Bootstrap, solo con clases CSS). *@
+@if (_filtrosAbiertos)
+{
+    <div class="offcanvas-backdrop fade show" @onclick="CerrarFiltros"></div>
+    <div class="offcanvas offcanvas-bottom hoja-inferior show" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="filtros-titulo">
+        <div class="offcanvas-header">
+            <h2 class="offcanvas-title h5" id="filtros-titulo">Ordenar y filtrar</h2>
+            <button type="button" class="btn-close" aria-label="Cerrar" @onclick="CerrarFiltros"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div class="mb-3">
+                <label for="orden" class="form-label">Ordenar por</label>
+                <select id="orden" class="form-select form-select-lg" @bind="_ordenPendiente">
+                    <option value="nombre">Nombre</option>
+                    <option value="precio_asc">Menor precio</option>
+                    <option value="precio_desc">Mayor precio</option>
+                    <option value="recientes">Más recientes</option>
+                </select>
+            </div>
+            <div class="form-check form-switch mb-4">
+                <input class="form-check-input" type="checkbox" role="switch" id="solo-stock" @bind="_soloDisponiblesPendiente" />
+                <label class="form-check-label" for="solo-stock">Solo productos con stock</label>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-secondary flex-fill" @onclick="LimpiarFiltros">Limpiar</button>
+                <button type="button" class="btn btn-primary flex-fill" @onclick="AplicarFiltros">Aplicar</button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private readonly List<Producto> _productos = new();
@@ -78,16 +101,30 @@
     private bool _cargando;
     private string? _error;
 
-    protected override async Task OnInitializedAsync()
+    // Valores que se editan en la hoja de filtros; recién se aplican al tocar "Aplicar".
+    private bool _filtrosAbiertos;
+    private string _ordenPendiente = "nombre";
+    private bool _soloDisponiblesPendiente;
+
+    private int FiltrosActivos => (_orden != "nombre" ? 1 : 0) + (_soloDisponibles ? 1 : 0);
+
+    protected override Task OnInitializedAsync() => IniciarAsync();
+
+    private async Task IniciarAsync()
     {
-        try
+        _error = null;
+
+        if (_categorias.Count == 0)
         {
-            _categorias = await Tienda.ObtenerCategoriasAsync();
-        }
-        catch (ApiException ex)
-        {
-            _error = ex.Message;
-            return;
+            try
+            {
+                _categorias = await Tienda.ObtenerCategoriasAsync();
+            }
+            catch (ApiException ex)
+            {
+                _error = ex.Message;
+                return;
+            }
         }
 
         await Recargar();
@@ -105,15 +142,28 @@
         return Recargar();
     }
 
-    private Task CambiarOrden(ChangeEventArgs e)
+    private void AbrirFiltros()
     {
-        _orden = e.Value?.ToString() ?? "nombre";
+        _ordenPendiente = _orden;
+        _soloDisponiblesPendiente = _soloDisponibles;
+        _filtrosAbiertos = true;
+    }
+
+    private void CerrarFiltros() => _filtrosAbiertos = false;
+
+    private Task AplicarFiltros()
+    {
+        _orden = _ordenPendiente;
+        _soloDisponibles = _soloDisponiblesPendiente;
+        _filtrosAbiertos = false;
         return Recargar();
     }
 
-    private Task CambiarDisponibles(ChangeEventArgs e)
+    private Task LimpiarFiltros()
     {
-        _soloDisponibles = e.Value is true;
+        _orden = "nombre";
+        _soloDisponibles = false;
+        _filtrosAbiertos = false;
         return Recargar();
     }
 

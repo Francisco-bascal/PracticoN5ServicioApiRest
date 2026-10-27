@@ -5,59 +5,60 @@
 @inject CarritoService Carrito
 @inject NotificacionesService Notificaciones
 @inject NavigationManager Navegacion
+@inject ICompartir Compartir
 
-<div class="pagina">
-    @if (_error != null)
-    {
-        <Alerta Tipo="error">@_error</Alerta>
-        <a class="btn btn-secundario" href="">Volver al catálogo</a>
-    }
-    else if (_producto == null)
-    {
-        <Cargando />
-    }
-    else
-    {
-        <ImagenProducto Producto="_producto" Clase="producto-img detalle-img" />
+<div class="container-md py-3">
+    <EstadoVista Cargando="_producto == null" Error="@_error" Reintentar="CargarAsync">
+        <ImagenProducto Producto="_producto!" Relacion="4x3" Clase="rounded-3 overflow-hidden mb-3" />
 
-        <h1 style="margin-top:14px">@_producto.Nombre</h1>
-        <p class="precio" style="font-size:1.7rem">@Formato.Dinero(_producto.Precio)</p>
-        <p><span class="etiqueta">@_producto.Categoria</span> <InsigniaStock Stock="_producto.Stock" /></p>
+        <div class="d-flex align-items-start justify-content-between gap-2">
+            <h1 class="h3">@_producto!.Nombre</h1>
+            <button type="button" class="btn btn-outline-secondary flex-shrink-0" aria-label="Compartir producto" @onclick="CompartirProducto">
+                <i class="bi bi-share" aria-hidden="true"></i>
+            </button>
+        </div>
+
+        <p class="display-6 fw-bold mb-2">@Formato.Dinero(_producto.Precio)</p>
+        <p class="d-flex flex-wrap align-items-center gap-2">
+            <span class="badge text-bg-secondary">@_producto.Categoria</span>
+            <InsigniaStock Stock="_producto.Stock" />
+        </p>
 
         @if (!string.IsNullOrWhiteSpace(_producto.Descripcion))
         {
             <p>@_producto.Descripcion</p>
         }
 
-        @if (_producto.Disponible)
-        {
-            @if (Disponible > 0)
-            {
-                <div class="campo">
-                    <label>Cantidad</label>
-                    <SelectorCantidad @bind-Valor="_cantidad" Minimo="1" Maximo="Disponible" />
-                    @if (EnCarrito > 0)
-                    {
-                        <span class="pequeno suave"> · ya tiene @EnCarrito en el carrito</span>
-                    }
-                </div>
-
-                <div class="acciones">
-                    <button class="btn btn-secundario" @onclick="Agregar">Agregar al carrito</button>
-                    <button class="btn btn-acento" @onclick="ComprarAhora">Comprar ahora</button>
-                </div>
-            }
-            else
-            {
-                <Alerta Tipo="info">Ya tiene en el carrito todas las unidades disponibles.</Alerta>
-                <a class="btn btn-primario btn-bloque" href="carrito">Ir al carrito</a>
-            }
-        }
-        else
+        @if (!_producto.Disponible)
         {
             <Alerta Tipo="aviso">Este producto no tiene stock por el momento.</Alerta>
         }
-    }
+        else if (Disponible > 0)
+        {
+            <div class="mb-3">
+                <label class="form-label d-block">Cantidad</label>
+                <SelectorCantidad @bind-Valor="_cantidad" Minimo="1" Maximo="Disponible" />
+                @if (EnCarrito > 0)
+                {
+                    <span class="small text-body-secondary ms-2">ya tiene @EnCarrito en el carrito</span>
+                }
+            </div>
+
+            <div class="d-grid gap-2 d-sm-flex">
+                <button type="button" class="btn btn-outline-primary btn-lg flex-fill" @onclick="Agregar">
+                    <i class="bi bi-cart-plus me-1" aria-hidden="true"></i>Agregar al carrito
+                </button>
+                <button type="button" class="btn btn-warning btn-lg flex-fill" @onclick="ComprarAhora">
+                    <i class="bi bi-lightning-charge me-1" aria-hidden="true"></i>Comprar ahora
+                </button>
+            </div>
+        }
+        else
+        {
+            <Alerta Tipo="info">Ya tiene en el carrito todas las unidades disponibles.</Alerta>
+            <a class="btn btn-primary btn-lg w-100" href="carrito">Ir al carrito</a>
+        }
+    </EstadoVista>
 </div>
 
 @code {
@@ -72,7 +73,9 @@
 
     protected override void OnInitialized() => Carrito.Cambio += AlCambiarCarrito;
 
-    protected override async Task OnParametersSetAsync()
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
     {
         _producto = null;
         _error = null;
@@ -99,6 +102,26 @@
     {
         await Carrito.AgregarAsync(_producto!, _cantidad);
         Navegacion.NavigateTo("carrito");
+    }
+
+    private async Task CompartirProducto()
+    {
+        try
+        {
+            bool abrioHoja = await Compartir.CompartirTextoAsync(
+                _producto!.Nombre,
+                $"{_producto.Nombre}: {Formato.Dinero(_producto.Precio)} en Tienda Móvil");
+
+            if (!abrioHoja)
+            {
+                Notificaciones.Mostrar("Se copió al portapapeles.");
+            }
+        }
+        catch (Exception)
+        {
+            // Compartir es opcional: si el dispositivo no lo permite no debe romper la pantalla.
+            Notificaciones.Error("No se pudo compartir el producto.");
+        }
     }
 
     private void AlCambiarCarrito() => InvokeAsync(StateHasChanged);

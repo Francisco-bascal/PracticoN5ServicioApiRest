@@ -6,50 +6,41 @@
 @inject NotificacionesService Notificaciones
 @inject NavigationManager Navegacion
 
-<div class="pagina">
-    <h1>@(EsNuevo ? "Nuevo producto" : "Editar producto")</h1>
+<div class="container-md pagina-formulario py-3">
+    <EncabezadoPagina Titulo="@(EsNuevo ? "Nuevo producto" : "Editar producto")" Icono="@(EsNuevo ? "plus-circle" : "pencil-square")" />
 
-    @if (_cargando)
-    {
-        <Cargando />
-    }
-    else if (_errorCarga != null)
-    {
-        <Alerta Tipo="error">@_errorCarga</Alerta>
-    }
-    else
-    {
+    <EstadoVista Cargando="_cargando" Error="@_errorCarga" Reintentar="Recargar">
         <EditForm Model="_formulario" OnValidSubmit="Guardar">
-            <DataAnnotationsValidator />
+            <ValidacionBootstrap />
 
-            <div class="campo">
-                <label for="nombre">Nombre</label>
-                <InputText id="nombre" @bind-Value="_formulario.Nombre" />
+            <div class="mb-3">
+                <label for="nombre" class="form-label">Nombre</label>
+                <InputText id="nombre" class="form-control form-control-lg" @bind-Value="_formulario.Nombre" />
                 <ValidationMessage For="() => _formulario.Nombre" />
             </div>
-            <div class="campo">
-                <label for="descripcion">Descripción</label>
-                <InputTextArea id="descripcion" @bind-Value="_formulario.Descripcion" />
+            <div class="mb-3">
+                <label for="descripcion" class="form-label">Descripción</label>
+                <InputTextArea id="descripcion" class="form-control" rows="3" @bind-Value="_formulario.Descripcion" />
                 <ValidationMessage For="() => _formulario.Descripcion" />
             </div>
-            <div class="fila-campos">
-                <div class="campo">
-                    <label for="precio">Precio ($)</label>
-                    <InputNumber id="precio" @bind-Value="_formulario.Precio" inputmode="decimal" step="0.01" />
+            <div class="row g-2 mb-3">
+                <div class="col">
+                    <label for="precio" class="form-label">Precio ($)</label>
+                    <InputNumber id="precio" class="form-control" @bind-Value="_formulario.Precio" inputmode="decimal" step="0.01" />
                     <ValidationMessage For="() => _formulario.Precio" />
                 </div>
                 @if (EsNuevo)
                 {
-                    <div class="campo">
-                        <label for="stock">Stock inicial</label>
-                        <InputNumber id="stock" @bind-Value="_formulario.Stock" inputmode="numeric" />
+                    <div class="col">
+                        <label for="stock" class="form-label">Stock inicial</label>
+                        <InputNumber id="stock" class="form-control" @bind-Value="_formulario.Stock" inputmode="numeric" />
                         <ValidationMessage For="() => _formulario.Stock" />
                     </div>
                 }
             </div>
-            <div class="campo">
-                <label for="categoria">Categoría</label>
-                <InputSelect id="categoria" @bind-Value="_formulario.CategoriaId">
+            <div class="mb-3">
+                <label for="categoria" class="form-label">Categoría</label>
+                <InputSelect id="categoria" class="form-select" @bind-Value="_formulario.CategoriaId">
                     <option value="0">Elija una categoría</option>
                     @foreach (var categoria in _categorias)
                     {
@@ -64,48 +55,71 @@
                 <Alerta Tipo="error">@_error</Alerta>
             }
 
-            <button class="btn btn-primario btn-bloque" type="submit" disabled="@_guardando">@(_guardando ? "Guardando..." : EsNuevo ? "Crear producto" : "Guardar cambios")</button>
+            <button class="btn btn-primary btn-lg w-100" type="submit" disabled="@_guardando">
+                @if (_guardando)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                }
+                @(_guardando ? "Guardando..." : EsNuevo ? "Crear producto" : "Guardar cambios")
+            </button>
         </EditForm>
 
         @if (!EsNuevo && _producto != null)
         {
-            <h2>Imagen</h2>
-            <div class="tarjeta" style="display:flex;gap:12px;align-items:center">
-                <ImagenProducto Producto="_producto" Clase="miniatura" />
-                <div style="flex:1">
-                    <InputFile OnChange="SubirImagen" accept="image/*" />
-                    <div class="pequeno suave">JPG, PNG o WebP de hasta 5 MB.</div>
+            <section class="card shadow-sm mt-4" aria-labelledby="imagen-titulo">
+                <div class="card-body">
+                    <h2 class="h5" id="imagen-titulo">Imagen</h2>
+                    <div class="d-flex gap-3 align-items-center">
+                        <ImagenProducto Producto="_producto" Clase="miniatura rounded overflow-hidden" />
+                        <div class="flex-grow-1 min-w-0">
+                            <label for="imagen" class="visually-hidden">Elegir imagen</label>
+                            <InputFile id="imagen" class="form-control" OnChange="SubirImagen" accept="image/*" />
+                            <div class="form-text">JPG, PNG o WebP de hasta 5 MB.</div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </section>
 
-            <h2>Stock</h2>
-            <div class="tarjeta">
-                <p>Stock actual: <InsigniaStock Stock="_producto.Stock" /></p>
-                <div class="fila-campos">
-                    <div class="campo">
-                        <label for="ajuste">Ajuste (+ suma, − resta)</label>
-                        <input id="ajuste" type="number" inputmode="numeric" placeholder="Ej.: -2" @bind="_ajuste" @bind:event="oninput" />
+            <section class="card shadow-sm mt-3" aria-labelledby="stock-titulo">
+                <div class="card-body">
+                    <h2 class="h5" id="stock-titulo">Stock</h2>
+                    <p>Stock actual: <InsigniaStock Stock="_producto.Stock" /></p>
+                    <div class="row g-2 mb-3">
+                        <div class="col-5">
+                            <label for="ajuste" class="form-label">Ajuste (+ suma, − resta)</label>
+                            <input id="ajuste" type="number" class="form-control" inputmode="numeric" placeholder="Ej.: -2" @bind="_ajuste" @bind:event="oninput" />
+                        </div>
+                        <div class="col-7">
+                            <label for="motivo" class="form-label">Motivo</label>
+                            <input id="motivo" class="form-control" placeholder="Ej.: rotura" maxlength="200" @bind="_observacion" />
+                        </div>
                     </div>
-                    <div class="campo">
-                        <label for="motivo">Motivo</label>
-                        <input id="motivo" placeholder="Ej.: rotura" maxlength="200" @bind="_observacion" />
-                    </div>
+                    @if (_errorStock != null)
+                    {
+                        <Alerta Tipo="error">@_errorStock</Alerta>
+                    }
+                    <button type="button" class="btn btn-outline-primary w-100" disabled="@(_ajuste == 0 || _ajustando)" @onclick="AjustarStock">
+                        @if (_ajustando)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                        }
+                        Aplicar ajuste
+                    </button>
+                    <p class="form-text mt-2 mb-0">Cada ajuste queda registrado en <a href="admin/movimientos">Movimientos</a>.</p>
                 </div>
-                @if (_errorStock != null)
-                {
-                    <Alerta Tipo="error">@_errorStock</Alerta>
-                }
-                <button class="btn btn-secundario btn-bloque" disabled="@(_ajuste == 0 || _ajustando)" @onclick="AjustarStock">Aplicar ajuste</button>
-                <p class="pequeno suave" style="margin-top:8px">Cada ajuste queda registrado en <a href="admin/movimientos">Movimientos</a>.</p>
-            </div>
+            </section>
 
             @if (Sesion.EsAdministrador)
             {
-                <h2>Zona de peligro</h2>
-                <button class="btn btn-peligro btn-bloque" @onclick="() => _confirmarEliminar = true">Eliminar producto</button>
+                <section class="mt-4" aria-labelledby="peligro-titulo">
+                    <h2 class="h5 text-danger" id="peligro-titulo">Zona de peligro</h2>
+                    <button type="button" class="btn btn-outline-danger w-100" @onclick="() => _confirmarEliminar = true">
+                        <i class="bi bi-trash3 me-1" aria-hidden="true"></i>Eliminar producto
+                    </button>
+                </section>
             }
         }
-    }
+    </EstadoVista>
 </div>
 
 <DialogoConfirmacion Visible="_confirmarEliminar" Titulo="Eliminar producto" Peligro="true" TextoConfirmar="Eliminar"
@@ -130,7 +144,9 @@
 
     private bool EsNuevo => Id == null;
 
-    protected override async Task OnParametersSetAsync()
+    protected override Task OnParametersSetAsync() => Recargar();
+
+    private async Task Recargar()
     {
         _cargando = true;
         _errorCarga = null;

@@ -2,37 +2,25 @@
 @attribute [Authorize(Roles = Roles.Personal)]
 @inject TiendaApi Tienda
 
-<div class="pagina">
-    <h1>Clientes</h1>
+<div class="container-md py-3">
+    <EncabezadoPagina Titulo="Clientes" Icono="people" />
 
-    @if (_error != null)
-    {
-        <Alerta Tipo="error">@_error</Alerta>
-    }
-    else if (_pagina == null)
-    {
-        <Cargando />
-    }
-    else if (_pagina.Elementos.Count == 0)
-    {
-        <div class="vacio"><div class="vacio-icono">🧑‍🤝‍🧑</div><p>Todavía no hay clientes.</p></div>
-    }
-    else
-    {
-        <p class="pequeno suave">@_pagina.TotalElementos @(_pagina.TotalElementos == 1 ? "cliente" : "clientes")</p>
+    <EstadoVista Cargando="_pagina == null" Error="@_error" Vacio="_pagina?.Elementos.Count == 0" Reintentar="Cargar"
+                 IconoVacio="people" MensajeVacio="Todavía no hay clientes.">
+        <p class="small text-body-secondary mb-2">@_pagina!.TotalElementos @(_pagina.TotalElementos == 1 ? "cliente" : "clientes")</p>
 
-        @foreach (var cliente in _pagina.Elementos)
-        {
-            <div class="fila">
-                <div class="fila-cuerpo">
-                    <div class="fila-titulo">@cliente.NombreCompleto</div>
-                    <div class="fila-detalle">@string.Join(" · ", new[] { cliente.Email, cliente.Telefono, cliente.Direccion }.Where(x => !string.IsNullOrWhiteSpace(x)))</div>
-                </div>
-            </div>
-        }
+        <ul class="list-group shadow-sm">
+            @foreach (var cliente in _pagina.Elementos)
+            {
+                <li class="list-group-item" @key="cliente.ClienteId">
+                    <div class="fw-semibold">@cliente.NombreCompleto</div>
+                    <div class="small text-body-secondary text-break">@string.Join(" · ", new[] { cliente.Email, cliente.Telefono, cliente.Direccion }.Where(x => !string.IsNullOrWhiteSpace(x)))</div>
+                </li>
+            }
+        </ul>
 
         <Paginador Pagina="_numero" TotalPaginas="_pagina.TotalPaginas" PaginaCambiada="IrAPagina" />
-    }
+    </EstadoVista>
 </div>
 
 @code {
@@ -50,6 +38,8 @@
 
     private async Task Cargar()
     {
+        _error = null;
+
         try
         {
             _pagina = await Tienda.ObtenerClientesAsync(_numero, 20);

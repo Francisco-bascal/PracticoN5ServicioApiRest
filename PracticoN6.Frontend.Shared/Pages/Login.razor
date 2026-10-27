@@ -4,11 +4,11 @@
 @inject ServidorApi Servidor
 @inject NavigationManager Navegacion
 
-<div class="pagina pagina-angosta">
-    <div class="marca">
-        <div class="marca-icono">🛍️</div>
-        <h1>Tienda Móvil</h1>
-        <p class="suave">Ingrese para ver el catálogo y comprar.</p>
+<div class="container pagina-angosta py-4">
+    <div class="text-center mb-4">
+        <i class="bi bi-bag-heart display-3 text-primary" aria-hidden="true"></i>
+        <h1 class="h3 mt-2">Tienda Móvil</h1>
+        <p class="text-body-secondary">Ingrese para ver el catálogo y comprar.</p>
     </div>
 
     @if (_aviso != null)
@@ -17,17 +17,17 @@
     }
 
     <EditForm Model="_formulario" OnValidSubmit="Ingresar">
-        <DataAnnotationsValidator />
+        <ValidacionBootstrap />
 
-        <div class="campo">
-            <label for="usuario">Usuario</label>
-            <InputText id="usuario" @bind-Value="_formulario.NombreUsuario" autocomplete="username" autocapitalize="none" />
+        <div class="mb-3">
+            <label for="usuario" class="form-label">Usuario</label>
+            <InputText id="usuario" class="form-control form-control-lg" @bind-Value="_formulario.NombreUsuario" autocomplete="username" autocapitalize="none" />
             <ValidationMessage For="() => _formulario.NombreUsuario" />
         </div>
 
-        <div class="campo">
-            <label for="password">Contraseña</label>
-            <InputText id="password" type="password" @bind-Value="_formulario.Password" autocomplete="current-password" />
+        <div class="mb-3">
+            <label for="password" class="form-label">Contraseña</label>
+            <EntradaPassword Id="password" @bind-Value="_formulario.Password" />
             <ValidationMessage For="() => _formulario.Password" />
         </div>
 
@@ -36,13 +36,19 @@
             <Alerta Tipo="error">@_error</Alerta>
         }
 
-        <button class="btn btn-primario btn-bloque" type="submit" disabled="@_enviando">
+        <button class="btn btn-primary btn-lg w-100" type="submit" disabled="@_enviando">
+            @if (_enviando)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+            }
             @(_enviando ? "Ingresando..." : "Ingresar")
         </button>
     </EditForm>
 
-    <p class="centrado" style="margin-top:16px">¿No tiene cuenta? <a href="registro">Regístrese</a></p>
-    <p class="centrado pequeno suave"><a href="servidor">⚙️ Servidor: @_servidor</a></p>
+    <p class="text-center mt-3">¿No tiene cuenta? <a href="registro">Regístrese</a></p>
+    <p class="text-center small">
+        <a href="servidor" class="text-body-secondary"><i class="bi bi-hdd-network me-1" aria-hidden="true"></i>Servidor: @_servidor</a>
+    </p>
 </div>
 
 @code {
