@@ -8,10 +8,23 @@ namespace PracticoN5ServicioApiRest.Services
     public class VentasService
     {
         private readonly SistemaVentasDbContext _contexto;
+        private readonly MovimientosStockService _stock;
+        private readonly UsuarioActual _usuarioActual;
+        private readonly ClientesService _clientes;
+        private readonly PasarelaPagoSimulada _pasarela;
 
-        public VentasService(SistemaVentasDbContext contexto)
+        public VentasService(
+            SistemaVentasDbContext contexto,
+            MovimientosStockService stock,
+            UsuarioActual usuarioActual,
+            ClientesService clientes,
+            PasarelaPagoSimulada pasarela)
         {
             _contexto = contexto;
+            _stock = stock;
+            _usuarioActual = usuarioActual;
+            _clientes = clientes;
+            _pasarela = pasarela;
         }
 
         /// <summary>Devuelve las ventas paginadas.</summary>
@@ -43,7 +56,9 @@ namespace PracticoN5ServicioApiRest.Services
                 .AsNoTracking()
                 .Include(v => v.Cliente)
                 .Include(v => v.Detalles)
-                    .ThenInclude(d => d.Producto);
+                    .ThenInclude(d => d.Producto)
+                .OrderByDescending(v => v.Fecha)
+                .ThenByDescending(v => v.VentaId);
 
             // Total de elementos (para calcular el total de páginas).
             int totalElementos = await consulta.CountAsync(cancellationToken);
@@ -73,6 +88,8 @@ namespace PracticoN5ServicioApiRest.Services
             return await _contexto.Ventas
                 .AsNoTracking()
                 .Include(v => v.Cliente)
+                .Include(v => v.Pago!)
+                    .ThenInclude(p => p.MedioPago)
                 .Include(v => v.Detalles)
                     .ThenInclude(d => d.Producto)
                 .FirstOrDefaultAsync(v => v.VentaId == id, cancellationToken);
@@ -89,6 +106,35 @@ namespace PracticoN5ServicioApiRest.Services
                     .ThenInclude(d => d.Producto)
                 .Where(v => v.ClienteId == clienteId)
                 .ToListAsync(cancellationToken);
+        }
+
+        /// <summary>Ventas de los clientes asociados a la cuenta de un usuario, más recientes primero.</summary>
+        public async Task<ICollection<PedidoDTO>> ObtenerPedidosDeUsuarioAsync(
+            int usuarioId,
+            CancellationToken cancellationToken = default)
+        {
+            var ventas = await ConsultaPedidos()
+                .Where(v => v.Cliente.UsuarioId == usuarioId)
+                .OrderByDescending(v => v.Fecha)
+                .ThenByDescending(v => v.VentaId)
+                .ToListAsync(cancellationToken);
+
+            return ventas.Select(MapearPedido).ToList();
+        }
+
+        public async Task<PedidoDTO?> ObtenerPedidoAsync(int ventaId, CancellationToken cancellationToken = default)
+        {
+            var venta = await ConsultaPedidos()
+                .FirstOrDefaultAsync(v => v.VentaId == ventaId, cancellationToken);
+
+            return venta == null ? null : MapearPedido(venta);
+        }
+
+        /// <summary>Indica si la venta pertenece a un cliente asociado a la cuenta del usuario.</summary>
+        public async Task<bool> EsDeUsuarioAsync(int ventaId, int usuarioId, CancellationToken cancellationToken = default)
+        {
+            return await _contexto.Ventas
+                .AnyAsync(v => v.VentaId == ventaId && v.Cliente.UsuarioId == usuarioId, cancellationToken);
         }
 
         /// <summary>Registra una venta, valida stock suficiente y lo decrementa, todo en una transacción.</summary>
@@ -123,7 +169,8 @@ namespace PracticoN5ServicioApiRest.Services
                         ? DateTime.UtcNow
                         : ventaDto.Fecha,
 
-                    ClienteId = ventaDto.ClienteId
+                    ClienteId = ventaDto.ClienteId,
+                    UsuarioId = _usuarioActual.Id
                 };
 
                 foreach (var detalleDto in ventaDto.Detalles)
@@ -141,25 +188,13 @@ namespace PracticoN5ServicioApiRest.Services
                             $"El precio unitario para el producto ID {detalleDto.ProductoId} debe ser mayor a cero.");
                     }
 
-                    var producto = await _contexto.Productos
-                        .FirstOrDefaultAsync(p => p.ProductoId == detalleDto.ProductoId, cancellationToken);
-
-                    if (producto == null)
-                    {
-                        throw new KeyNotFoundException($"No se encontró el producto con ID {detalleDto.ProductoId}.");
-                    }
-
-                    // No se permite vender sin stock suficiente.
-                    if (producto.Stock < detalleDto.Cantidad)
-                    {
-                        throw new InvalidOperationException(
-                            $"Stock insuficiente para el producto '{producto.Nombre}'. " +
-                            $"Stock disponible: {producto.Stock}, " +
-                            $"Solicitado: {detalleDto.Cantidad}.");
-                    }
-
-                    //Lógica de ajuste de cantidad en stock: vender resta stock.
-                    producto.Stock -= detalleDto.Cantidad;
+                    //Lógica de ajuste de cantidad en stock: vender resta stock (y falla si no hay suficiente).
+                    await _stock.AjustarAsync(
+                        detalleDto.ProductoId,
+                        -detalleDto.Cantidad,
+                        MotivosMovimiento.Venta,
+                        venta: venta,
+                        cancellationToken: cancellationToken);
 
                     var detalle = new DetalleVenta
                     {
@@ -196,15 +231,148 @@ namespace PracticoN5ServicioApiRest.Services
             {
                 // Ante cualquier error deshace todo y relanza la excepción.
                 await transaccion.RollbackAsync(cancellationToken);
+                // Las entidades de la operación fallida no deben quedar pendientes de guardarse.
+                _contexto.ChangeTracker.Clear();
                 throw;
             }
         }
 
-        /// <summary>Anula una venta y devuelve el stock que había descontado, todo en una transacción.</summary>
+        /// <summary>
+        /// Compra desde el carrito: toma los precios vigentes del catálogo (el cliente solo manda producto y cantidad),
+        /// descuenta el stock, simula el pago y registra la venta. Todo ocurre en una sola transacción: si el pago es
+        /// rechazado o falta stock, no queda nada registrado.
+        /// </summary>
+        public async Task<PedidoDTO> CheckoutAsync(CheckoutRequestDTO dto, CancellationToken cancellationToken = default)
+        {
+            int usuarioId = _usuarioActual.Id
+                ?? throw new InvalidOperationException("No se pudo identificar al usuario que realiza la compra.");
+
+            if (dto.Items == null || dto.Items.Count == 0)
+            {
+                throw new ArgumentException("El carrito está vacío.");
+            }
+
+            if (dto.Items.Any(i => i.Cantidad <= 0))
+            {
+                throw new ArgumentException("Todas las cantidades deben ser mayores a cero.");
+            }
+
+            // Une las líneas repetidas del mismo producto.
+            var lineas = dto.Items
+                .GroupBy(i => i.ProductoId)
+                .Select(g => new { ProductoId = g.Key, Cantidad = g.Sum(i => i.Cantidad) })
+                .ToList();
+
+            var medioPago = await _contexto.MediosPago
+                .AsNoTracking()
+                .FirstOrDefaultAsync(m => m.MedioPagoId == dto.MedioPagoId, cancellationToken);
+
+            if (medioPago == null)
+            {
+                throw new KeyNotFoundException($"No se encontró el medio de pago con ID {dto.MedioPagoId}.");
+            }
+
+            // El personal puede vender a un cliente puntual (venta de mostrador); un cliente siempre compra para sí.
+            Cliente cliente;
+            if (dto.ClienteId.HasValue && _usuarioActual.EsPersonal)
+            {
+                cliente = await _contexto.Clientes
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.ClienteId == dto.ClienteId.Value, cancellationToken)
+                    ?? throw new KeyNotFoundException($"No se encontró el cliente con ID {dto.ClienteId.Value}.");
+            }
+            else
+            {
+                cliente = await _clientes.ObtenerOCrearPorUsuarioAsync(usuarioId, cancellationToken);
+            }
+
+            // Precios vigentes del catálogo.
+            var ids = lineas.Select(l => l.ProductoId).ToList();
+            var productos = await _contexto.Productos
+                .AsNoTracking()
+                .Where(p => ids.Contains(p.ProductoId))
+                .ToDictionaryAsync(p => p.ProductoId, cancellationToken);
+
+            decimal total = 0;
+
+            foreach (var linea in lineas)
+            {
+                if (!productos.TryGetValue(linea.ProductoId, out var producto))
+                {
+                    throw new KeyNotFoundException($"No se encontró el producto con ID {linea.ProductoId}.");
+                }
+
+                if (producto.Precio <= 0)
+                {
+                    throw new InvalidOperationException($"El producto '{producto.Nombre}' no tiene un precio configurado y no puede venderse.");
+                }
+
+                total += producto.Precio * linea.Cantidad;
+            }
+
+            await using var transaccion = await _contexto.Database.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                var venta = new Venta
+                {
+                    Fecha = DateTime.UtcNow,
+                    ClienteId = cliente.ClienteId,
+                    UsuarioId = usuarioId
+                };
+
+                foreach (var linea in lineas)
+                {
+                    // Reserva el stock; falla con conflicto si otra compra se llevó las últimas unidades.
+                    await _stock.AjustarAsync(
+                        linea.ProductoId,
+                        -linea.Cantidad,
+                        MotivosMovimiento.Venta,
+                        venta: venta,
+                        cancellationToken: cancellationToken);
+
+                    venta.Detalles.Add(new DetalleVenta
+                    {
+                        ProductoId = linea.ProductoId,
+                        Cantidad = linea.Cantidad,
+                        PrecioUnitario = productos[linea.ProductoId].Precio
+                    });
+                }
+
+                // Si la pasarela rechaza el pago, la excepción deshace también la reserva de stock.
+                string codigoAutorizacion = _pasarela.Autorizar(medioPago, total, dto.NumeroTarjeta);
+
+                venta.Pago = new Pago
+                {
+                    Monto = total,
+                    Fecha = DateTime.UtcNow,
+                    CodigoAutorizacion = codigoAutorizacion,
+                    MedioPagoId = medioPago.MedioPagoId
+                };
+
+                await _contexto.Ventas.AddAsync(venta, cancellationToken);
+                await _contexto.SaveChangesAsync(cancellationToken);
+                await transaccion.CommitAsync(cancellationToken);
+
+                return (await ObtenerPedidoAsync(venta.VentaId, cancellationToken))!;
+            }
+            catch
+            {
+                await transaccion.RollbackAsync(cancellationToken);
+                // Las entidades de la operación fallida no deben quedar pendientes de guardarse.
+                _contexto.ChangeTracker.Clear();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Anula una venta y devuelve el stock que había descontado, todo en una transacción.
+        /// La venta no se borra: queda marcada como anulada para conservar la trazabilidad.
+        /// </summary>
         /// <param name="id">Identificador de la venta a anular.</param>
         public async Task<bool> AnularVentaAsync(int id, CancellationToken cancellationToken = default)
         {
-            // Transacción: stock, detalles y cabecera se modifican juntos.
+            // Transacción: stock y marca de anulación se modifican juntos.
             await using var transaccion = await _contexto.Database.BeginTransactionAsync(cancellationToken);
 
             try
@@ -218,23 +386,24 @@ namespace PracticoN5ServicioApiRest.Services
                     throw new KeyNotFoundException($"No se encontró la venta con ID {id}.");
                 }
 
-                // Reincorporar el stock de los productos vendidos
-                foreach (var detalle in venta.Detalles)
+                if (venta.Anulada)
                 {
-                    var producto = await _contexto.Productos
-                        .FirstOrDefaultAsync(p => p.ProductoId == detalle.ProductoId, cancellationToken);
-
-                    if (producto != null)
-                    {
-                        // Suma stock: no requiere validación de disponibilidad (a diferencia de anular compra).
-                        producto.Stock += detalle.Cantidad;
-                    }
+                    throw new InvalidOperationException($"La venta con ID {id} ya fue anulada.");
                 }
 
-                //Primero se eliminan los detalles para luego poder eliminar la venta.
-                //El orden es obligatorio por la restricción DeleteBehavior.Restrict.
-                _contexto.DetallesVenta.RemoveRange(venta.Detalles);
-                _contexto.Ventas.Remove(venta);
+                // Reincorporar el stock de los productos vendidos (suma stock: no requiere validar disponibilidad).
+                foreach (var detalle in venta.Detalles)
+                {
+                    await _stock.AjustarAsync(
+                        detalle.ProductoId,
+                        detalle.Cantidad,
+                        MotivosMovimiento.AnulacionVenta,
+                        venta: venta,
+                        cancellationToken: cancellationToken);
+                }
+
+                venta.Anulada = true;
+                venta.FechaAnulacion = DateTime.UtcNow;
 
                 // Guarda y confirma los cambios.
                 await _contexto.SaveChangesAsync(cancellationToken);
@@ -244,10 +413,46 @@ namespace PracticoN5ServicioApiRest.Services
             }
             catch
             {
-                // Deshace todo (stock y eliminaciones) y relanza la excepción.
+                // Deshace todo (stock y marca de anulación) y relanza la excepción.
                 await transaccion.RollbackAsync(cancellationToken);
+                // Las entidades de la operación fallida no deben quedar pendientes de guardarse.
+                _contexto.ChangeTracker.Clear();
                 throw;
             }
+        }
+
+        private IQueryable<Venta> ConsultaPedidos()
+        {
+            return _contexto.Ventas
+                .AsNoTracking()
+                .Include(v => v.Cliente)
+                .Include(v => v.Pago!)
+                    .ThenInclude(p => p.MedioPago)
+                .Include(v => v.Detalles)
+                    .ThenInclude(d => d.Producto);
+        }
+
+        private static PedidoDTO MapearPedido(Venta venta)
+        {
+            return new PedidoDTO
+            {
+                VentaId = venta.VentaId,
+                Fecha = venta.Fecha,
+                ClienteId = venta.ClienteId,
+                Cliente = $"{venta.Cliente.Nombre} {venta.Cliente.Apellido}".Trim(),
+                Anulada = venta.Anulada,
+                MedioPago = venta.Pago?.MedioPago?.Nombre,
+                CodigoAutorizacion = venta.Pago?.CodigoAutorizacion,
+                Items = venta.Detalles
+                    .Select(d => new PedidoItemDTO
+                    {
+                        ProductoId = d.ProductoId,
+                        Producto = d.Producto.Nombre,
+                        Cantidad = d.Cantidad,
+                        PrecioUnitario = d.PrecioUnitario
+                    })
+                    .ToList()
+            };
         }
     }
 }

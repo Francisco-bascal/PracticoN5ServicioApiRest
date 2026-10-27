@@ -40,7 +40,9 @@ namespace PracticoN5ServicioApiRest.Services
 
             // AsNoTracking: consulta de solo lectura, sin seguimiento de cambios.
             var consulta = _contexto.Clientes
-                .AsNoTracking();
+                .AsNoTracking()
+                .OrderBy(c => c.Nombre)
+                .ThenBy(c => c.ClienteId);
 
             // Total de elementos (para calcular el total de páginas).
             int totalElementos = await consulta.CountAsync(cancellationToken);
@@ -146,6 +148,39 @@ namespace PracticoN5ServicioApiRest.Services
             await _contexto.SaveChangesAsync(cancellationToken);
 
             return clienteExistente;
+        }
+
+        /// <summary>Devuelve el perfil de cliente de un usuario; si todavía no tiene uno, lo crea con los datos de su cuenta.</summary>
+        public async Task<Cliente> ObtenerOCrearPorUsuarioAsync(int usuarioId, CancellationToken cancellationToken = default)
+        {
+            var cliente = await _contexto.Clientes
+                .FirstOrDefaultAsync(c => c.UsuarioId == usuarioId, cancellationToken);
+
+            if (cliente != null)
+            {
+                return cliente;
+            }
+
+            var usuario = await _contexto.Usuarios
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.UsuarioId == usuarioId, cancellationToken);
+
+            if (usuario == null)
+            {
+                throw new KeyNotFoundException($"No se encontró el usuario con ID {usuarioId}.");
+            }
+
+            cliente = new Cliente
+            {
+                Nombre = usuario.NombreUsuario,
+                Email = usuario.Email,
+                UsuarioId = usuarioId
+            };
+
+            _contexto.Clientes.Add(cliente);
+            await _contexto.SaveChangesAsync(cancellationToken);
+
+            return cliente;
         }
 
         public async Task<bool> EliminarAsync(int id, CancellationToken cancellationToken = default)

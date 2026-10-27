@@ -40,6 +40,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             return Ok(categoria);
         }
 
+        [Authorize(Roles = NombresRol.Personal)]
         [HttpPost]
         public async Task<IActionResult> Crear(
             [FromBody] CategoriaProducto categoria, 
@@ -63,6 +64,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
+        [Authorize(Roles = NombresRol.Personal)]
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Actualizar(
             int id, 

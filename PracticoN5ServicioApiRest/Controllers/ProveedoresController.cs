@@ -5,10 +5,10 @@ using PracticoN5ServicioApiRest.Services;
 
 namespace PracticoN5ServicioApiRest.Controllers
 {
-    // Todas las acciones requieren un token JWT válido (401 si falta o es inválido).
+    // Solo el personal del negocio (Administrador u Operador) accede a este recurso: 401 sin token válido, 403 con otro rol.
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+    [Authorize(Roles = NombresRol.Personal)]
     public class ProveedoresController : ControllerBase
     {
         private readonly ProveedoresService _servicio;

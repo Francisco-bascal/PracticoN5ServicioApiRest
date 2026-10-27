@@ -17,5 +17,8 @@ namespace PracticoN5ServicioApiRest.DTOs
 
         [Required]
         public string Rol { get; set; } = string.Empty;
+
+        // null = no cambia el estado actual del usuario.
+        public bool? Activo { get; set; }
     }
 }

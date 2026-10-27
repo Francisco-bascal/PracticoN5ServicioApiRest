@@ -12,6 +12,8 @@ namespace PracticoN5ServicioApiRest.Services
 {
     public class UsuariosService
     {
+        private const int LongitudMinimaPassword = 6;
+
         private readonly SistemaVentasDbContext _contexto;
         private readonly IConfiguration _configuracion;
         private readonly PasswordHasher<Usuario> _passwordHasher;
@@ -26,13 +28,12 @@ namespace PracticoN5ServicioApiRest.Services
         /// <summary>Valida las credenciales y, si son correctas, genera el token JWT firmado con la expiración de la configuración.</summary>
         /// <param name="nombreUsuario">Nombre de usuario.</param>
         /// <param name="password">Contraseña en texto plano.</param>
-        /// <returns>El token JWT serializado, o null si las credenciales son inválidas.</returns>
-        
-        
-        public async Task<string?> LoginAsync(string nombreUsuario, string password, CancellationToken cancellationToken = default)
+        /// <returns>El token JWT con los datos básicos de la sesión, o null si las credenciales son inválidas o el usuario está desactivado.</returns>
+        public async Task<LoginResponseDTO?> LoginAsync(string nombreUsuario, string password, CancellationToken cancellationToken = default)
         {
             // Busca el usuario por nombre, insensible a mayúsculas/minúsculas.
             var usuario = await _contexto.Usuarios
+                .Include(u => u.Rol)
                 .FirstOrDefaultAsync(
                     u => u.NombreUsuario.ToLower() == nombreUsuario.ToLower(),
                     cancellationToken);
@@ -50,12 +51,18 @@ namespace PracticoN5ServicioApiRest.Services
                 return null;
             }
 
+            // Un usuario desactivado no puede iniciar sesión (se responde igual que una credencial inválida).
+            if (!usuario.Activo)
+            {
+                return null;
+            }
+
             // Claims del usuario que viajan dentro del token.
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, usuario.UsuarioId.ToString()),
                 new Claim(ClaimTypes.Name, usuario.NombreUsuario),
-                new Claim(ClaimTypes.Role, usuario.Rol)
+                new Claim(ClaimTypes.Role, usuario.Rol.Nombre)
             };
 
             // Clave simétrica de firma, la misma que usa Program.cs para validar.
@@ -68,22 +75,31 @@ namespace PracticoN5ServicioApiRest.Services
                 key,
                 SecurityAlgorithms.HmacSha256);
 
+            var expiracion = DateTime.UtcNow.AddMinutes(_configuracion.GetValue<int?>("Jwt:ExpirationMinutes") ?? 60);
+
             // Emisor, claims, expiración (de la configuración) y firma.
             var token = new JwtSecurityToken(
                 issuer: _configuracion["Jwt:Issuer"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(_configuracion.GetValue<int?>("Jwt:ExpirationMinutes") ?? 60),
+                expires: expiracion,
                 signingCredentials: credentials);
 
-            // Serializa el token a su forma de string (header.payload.signature).
-            return new JwtSecurityTokenHandler()
-                .WriteToken(token);
+            return new LoginResponseDTO
+            {
+                // Serializa el token a su forma de string (header.payload.signature).
+                Token = new JwtSecurityTokenHandler().WriteToken(token),
+                NombreUsuario = usuario.NombreUsuario,
+                Rol = usuario.Rol.Nombre,
+                ExpiraUtc = expiracion
+            };
         }
 
         public async Task<ICollection<Usuario>> ObtenerTodosAsync(CancellationToken cancellationToken = default)
         {
             return await _contexto.Usuarios
                 .AsNoTracking()
+                .Include(u => u.Rol)
+                .OrderBy(u => u.NombreUsuario)
                 .ToListAsync(cancellationToken);
         }
 
@@ -91,6 +107,7 @@ namespace PracticoN5ServicioApiRest.Services
         {
             return await _contexto.Usuarios
                 .AsNoTracking()
+                .Include(u => u.Rol)
                 .FirstOrDefaultAsync(u => u.UsuarioId == id, cancellationToken);
         }
 
@@ -98,23 +115,88 @@ namespace PracticoN5ServicioApiRest.Services
         {
             return await _contexto.Usuarios
                 .AsNoTracking()
+                .Include(u => u.Rol)
                 .FirstOrDefaultAsync(u => u.NombreUsuario.ToLower() == nombreUsuario.ToLower(), cancellationToken);
         }
 
-        public async Task<Usuario> RegistrarOperadorAsync(RegistrarUsuarioDTO dto, CancellationToken cancellationToken = default)
+        public async Task<ICollection<Rol>> ObtenerRolesAsync(CancellationToken cancellationToken = default)
         {
+            return await _contexto.Roles
+                .AsNoTracking()
+                .OrderBy(r => r.RolId)
+                .ToListAsync(cancellationToken);
+        }
+
+        /// <summary>Datos del usuario autenticado junto con su perfil de cliente (si tiene).</summary>
+        public async Task<PerfilUsuarioDTO> ObtenerPerfilAsync(int usuarioId, CancellationToken cancellationToken = default)
+        {
+            var usuario = await ObtenerPorIdAsync(usuarioId, cancellationToken);
+
+            if (usuario == null)
+            {
+                throw new KeyNotFoundException($"No se encontró el usuario con ID {usuarioId}.");
+            }
+
+            var cliente = await _contexto.Clientes
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.UsuarioId == usuarioId, cancellationToken);
+
+            return new PerfilUsuarioDTO
+            {
+                UsuarioId = usuario.UsuarioId,
+                NombreUsuario = usuario.NombreUsuario,
+                Email = usuario.Email,
+                Rol = usuario.Rol.Nombre,
+                ClienteId = cliente?.ClienteId,
+                Nombre = cliente?.Nombre,
+                Apellido = cliente?.Apellido,
+                Telefono = cliente?.Telefono,
+                Direccion = cliente?.Direccion
+            };
+        }
+
+        public async Task<PerfilUsuarioDTO> ActualizarPerfilAsync(
+            int usuarioId,
+            ActualizarPerfilDTO dto,
+            CancellationToken cancellationToken = default)
+        {
+            var usuario = await _contexto.Usuarios
+                .FirstOrDefaultAsync(u => u.UsuarioId == usuarioId, cancellationToken);
+
+            if (usuario == null)
+            {
+                throw new KeyNotFoundException($"No se encontró el usuario con ID {usuarioId}.");
+            }
+
+            var cliente = await _contexto.Clientes
+                .FirstOrDefaultAsync(c => c.UsuarioId == usuarioId, cancellationToken);
+
+            if (cliente == null)
+            {
+                cliente = new Cliente { UsuarioId = usuarioId, Email = usuario.Email };
+                _contexto.Clientes.Add(cliente);
+            }
+
+            cliente.Nombre = dto.Nombre;
+            cliente.Apellido = dto.Apellido;
+            cliente.Telefono = dto.Telefono;
+            cliente.Direccion = dto.Direccion;
+
+            await _contexto.SaveChangesAsync(cancellationToken);
+
+            return await ObtenerPerfilAsync(usuarioId, cancellationToken);
+        }
+
+        /// <summary>Registro público: crea una cuenta con rol Cliente y su perfil de cliente.</summary>
+        public async Task<Usuario> RegistrarClienteAsync(RegistrarUsuarioDTO dto, CancellationToken cancellationToken = default)
+        {
+            ValidarPassword(dto.Password);
             await ValidarUnicidadAsync(dto.NombreUsuario, dto.Email, null, cancellationToken);
 
-            // El registro público asigna siempre el rol Operador.
-            var usuario = new Usuario
-            {
-                NombreUsuario = dto.NombreUsuario,
-                Email = dto.Email,
-                Rol = "Operador",
-                PasswordHash = _passwordHasher.HashPassword(new Usuario(), dto.Password)
-            };
+            // El registro público asigna siempre el rol Cliente: los roles del personal los otorga un administrador.
+            var usuario = await CrearUsuarioAsync(dto.NombreUsuario, dto.Email, dto.Password, NombresRol.Cliente, cancellationToken);
 
-            await _contexto.Usuarios.AddAsync(usuario, cancellationToken);
+            await VincularClienteAsync(usuario, dto.Nombre, dto.Apellido, dto.Telefono, dto.Direccion, cancellationToken);
             await _contexto.SaveChangesAsync(cancellationToken);
 
             return usuario;
@@ -122,19 +204,16 @@ namespace PracticoN5ServicioApiRest.Services
 
         public async Task<Usuario> CrearAsync(CrearUsuarioDTO dto, CancellationToken cancellationToken = default)
         {
-            ValidarRol(dto.Rol);
-
+            ValidarPassword(dto.Password);
             await ValidarUnicidadAsync(dto.NombreUsuario, dto.Email, null, cancellationToken);
 
-            var usuario = new Usuario
-            {
-                NombreUsuario = dto.NombreUsuario,
-                Email = dto.Email,
-                Rol = dto.Rol,
-                PasswordHash = _passwordHasher.HashPassword(new Usuario(), dto.Password)
-            };
+            var usuario = await CrearUsuarioAsync(dto.NombreUsuario, dto.Email, dto.Password, dto.Rol, cancellationToken);
 
-            await _contexto.Usuarios.AddAsync(usuario, cancellationToken);
+            if (usuario.Rol.Nombre == NombresRol.Cliente)
+            {
+                await VincularClienteAsync(usuario, null, null, null, null, cancellationToken);
+            }
+
             await _contexto.SaveChangesAsync(cancellationToken);
 
             return usuario;
@@ -146,9 +225,10 @@ namespace PracticoN5ServicioApiRest.Services
             int idUsuarioActual,
             CancellationToken cancellationToken = default)
         {
-            ValidarRol(dto.Rol);
+            var rol = await ObtenerRolAsync(dto.Rol, cancellationToken);
 
             var usuarioExistente = await _contexto.Usuarios
+                .Include(u => u.Rol)
                 .FirstOrDefaultAsync(u => u.UsuarioId == id, cancellationToken);
 
             if (usuarioExistente == null)
@@ -158,24 +238,37 @@ namespace PracticoN5ServicioApiRest.Services
 
             await ValidarUnicidadAsync(dto.NombreUsuario, dto.Email, id, cancellationToken);
 
-            // No se puede degradar al único administrador del sistema.
-            if (usuarioExistente.Rol == "Administrador"
-                && dto.Rol != "Administrador"
+            bool quedaActivo = dto.Activo ?? usuarioExistente.Activo;
+
+            if (id == idUsuarioActual && !quedaActivo)
+            {
+                throw new InvalidOperationException("No se puede desactivar el propio usuario.");
+            }
+
+            // No se puede degradar ni desactivar al único administrador activo del sistema.
+            bool dejaDeSerAdministrador = rol.Nombre != NombresRol.Administrador || !quedaActivo;
+
+            if (usuarioExistente.Rol.Nombre == NombresRol.Administrador
+                && dejaDeSerAdministrador
                 && await EsElUnicoAdministradorAsync(id, cancellationToken))
             {
-                throw new InvalidOperationException("No se puede degradar al único administrador del sistema.");
+                throw new InvalidOperationException("No se puede degradar ni desactivar al único administrador del sistema.");
             }
 
             usuarioExistente.NombreUsuario = dto.NombreUsuario;
             usuarioExistente.Email = dto.Email;
-            usuarioExistente.Rol = dto.Rol;
+            usuarioExistente.RolId = rol.RolId;
+            usuarioExistente.Activo = quedaActivo;
 
             if (!string.IsNullOrWhiteSpace(dto.Password))
             {
+                ValidarPassword(dto.Password);
                 usuarioExistente.PasswordHash = _passwordHasher.HashPassword(usuarioExistente, dto.Password);
             }
 
             await _contexto.SaveChangesAsync(cancellationToken);
+
+            usuarioExistente.Rol = rol;
 
             return usuarioExistente;
         }
@@ -201,17 +294,114 @@ namespace PracticoN5ServicioApiRest.Services
                 throw new InvalidOperationException("No se puede eliminar al único administrador del sistema.");
             }
 
+            // Si el usuario ya operó en el sistema se conserva su historial: se lo desactiva en lugar de eliminarlo.
+            bool tieneHistorial =
+                await _contexto.Ventas.AnyAsync(v => v.UsuarioId == id, cancellationToken)
+                || await _contexto.Compras.AnyAsync(c => c.UsuarioId == id, cancellationToken)
+                || await _contexto.MovimientosStock.AnyAsync(m => m.UsuarioId == id, cancellationToken);
+
+            if (tieneHistorial)
+            {
+                throw new InvalidOperationException(
+                    "No se puede eliminar el usuario porque registró ventas, compras o movimientos de stock. Desactívelo para impedir su acceso.");
+            }
+
+            var cliente = await _contexto.Clientes
+                .FirstOrDefaultAsync(c => c.UsuarioId == id, cancellationToken);
+
+            if (cliente != null)
+            {
+                bool clienteTieneVentas = await _contexto.Ventas
+                    .AnyAsync(v => v.ClienteId == cliente.ClienteId, cancellationToken);
+
+                if (clienteTieneVentas)
+                {
+                    throw new InvalidOperationException(
+                        "No se puede eliminar el usuario porque su perfil de cliente posee ventas registradas. Desactívelo para impedir su acceso.");
+                }
+
+                _contexto.Clientes.Remove(cliente);
+            }
+
             _contexto.Usuarios.Remove(usuario);
             await _contexto.SaveChangesAsync(cancellationToken);
 
             return true;
         }
 
-        private static void ValidarRol(string rol)
+        private async Task<Usuario> CrearUsuarioAsync(
+            string nombreUsuario,
+            string email,
+            string password,
+            string nombreRol,
+            CancellationToken cancellationToken)
         {
-            if (rol != "Administrador" && rol != "Operador")
+            var rol = await ObtenerRolAsync(nombreRol, cancellationToken);
+
+            var usuario = new Usuario
             {
-                throw new ArgumentException("El rol debe ser 'Administrador' o 'Operador'.", nameof(rol));
+                NombreUsuario = nombreUsuario,
+                Email = email,
+                RolId = rol.RolId,
+                Rol = rol,
+                PasswordHash = _passwordHasher.HashPassword(new Usuario(), password)
+            };
+
+            await _contexto.Usuarios.AddAsync(usuario, cancellationToken);
+
+            return usuario;
+        }
+
+        // Asocia la cuenta a un cliente que ya existía con ese correo (cargado antes por el personal) o crea uno nuevo.
+        private async Task VincularClienteAsync(
+            Usuario usuario,
+            string? nombre,
+            string? apellido,
+            string? telefono,
+            string? direccion,
+            CancellationToken cancellationToken)
+        {
+            var existente = await _contexto.Clientes
+                .FirstOrDefaultAsync(
+                    c => c.UsuarioId == null && c.Email != null && c.Email.ToLower() == usuario.Email.ToLower(),
+                    cancellationToken);
+
+            if (existente != null)
+            {
+                existente.Usuario = usuario;
+                return;
+            }
+
+            _contexto.Clientes.Add(new Cliente
+            {
+                Nombre = string.IsNullOrWhiteSpace(nombre) ? usuario.NombreUsuario : nombre,
+                Apellido = apellido,
+                Telefono = telefono,
+                Direccion = direccion,
+                Email = usuario.Email,
+                Usuario = usuario
+            });
+        }
+
+        private async Task<Rol> ObtenerRolAsync(string nombreRol, CancellationToken cancellationToken)
+        {
+            var rol = await _contexto.Roles
+                .FirstOrDefaultAsync(r => r.Nombre == nombreRol, cancellationToken);
+
+            if (rol == null)
+            {
+                var validos = await _contexto.Roles.OrderBy(r => r.RolId).Select(r => r.Nombre).ToListAsync(cancellationToken);
+                throw new ArgumentException($"El rol debe ser uno de: {string.Join(", ", validos)}.", nameof(nombreRol));
+            }
+
+            return rol;
+        }
+
+        private static void ValidarPassword(string? password)
+        {
+            if (string.IsNullOrWhiteSpace(password) || password.Length < LongitudMinimaPassword)
+            {
+                throw new ArgumentException($"La contraseña debe tener al menos {LongitudMinimaPassword} caracteres.", nameof(password));
             }
         }
 
@@ -249,18 +439,19 @@ namespace PracticoN5ServicioApiRest.Services
             }
         }
 
+        // Verdadero si el usuario es administrador activo y no hay otro administrador activo en el sistema.
         private async Task<bool> EsElUnicoAdministradorAsync(int idUsuario, CancellationToken cancellationToken)
         {
-            bool esAdministrador = await _contexto.Usuarios
-                .AnyAsync(u => u.UsuarioId == idUsuario && u.Rol == "Administrador", cancellationToken);
+            bool esAdministradorActivo = await _contexto.Usuarios
+                .AnyAsync(u => u.UsuarioId == idUsuario && u.Activo && u.Rol.Nombre == NombresRol.Administrador, cancellationToken);
 
-            if (!esAdministrador)
+            if (!esAdministradorActivo)
             {
                 return false;
             }
 
             return await _contexto.Usuarios
-                .CountAsync(u => u.Rol == "Administrador", cancellationToken) == 1;
+                .CountAsync(u => u.Activo && u.Rol.Nombre == NombresRol.Administrador, cancellationToken) == 1;
         }
     }
 }

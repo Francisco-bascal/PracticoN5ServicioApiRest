@@ -7,65 +7,67 @@ namespace PracticoN5ServicioApiRest.Services
 {
     public class ProductosService
     {
-private readonly SistemaVentasDbContext _contexto;
+        private readonly SistemaVentasDbContext _contexto;
         private readonly ImagenesService _imagenesService;
+        private readonly MovimientosStockService _stock;
 
-        public ProductosService(SistemaVentasDbContext contexto, ImagenesService imagenesService)
+        public ProductosService(
+            SistemaVentasDbContext contexto,
+            ImagenesService imagenesService,
+            MovimientosStockService stock)
         {
             _contexto = contexto;
             _imagenesService = imagenesService;
+            _stock = stock;
         }
 
-/// <summary>Devuelve los productos paginados.</summary>
+        /// <summary>Devuelve el catálogo paginado, con búsqueda y filtros opcionales.</summary>
+        /// <param name="busqueda">Texto a buscar en el nombre y la descripción.</param>
+        /// <param name="categoriaId">Limita el resultado a una categoría.</param>
+        /// <param name="soloDisponibles">true = oculta los productos sin stock.</param>
+        /// <param name="orden">nombre (default), precio_asc, precio_desc o recientes.</param>
         /// <param name="pagina">Número de página (default 1).</param>
         /// <param name="tamanoPagina">Elementos por página (default 10, máx. 100).</param>
-        public async Task<ResultadoPaginadoDto<Producto>> ObtenerTodosAsync(
-            int pagina = 1, 
-            int tamanoPagina = 10, 
+        public async Task<ResultadoPaginadoDto<ResponseProductoDTO>> ObtenerTodosAsync(
+            string? busqueda = null,
+            int? categoriaId = null,
+            bool soloDisponibles = false,
+            string? orden = null,
+            int pagina = 1,
+            int tamanoPagina = 10,
             CancellationToken cancellationToken = default)
         {
-            // Validación de los parámetros de paginación.
-            if (pagina <= 0)
+            // AsNoTracking: consulta de solo lectura.
+            var consulta = _contexto.Productos.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(busqueda))
             {
-                throw new ArgumentException("El número de página debe ser mayor o igual a 1.", nameof(pagina));
+                // LIKE (y no Contains): se comporta igual con SQL Server y SQLite y no distingue mayúsculas de minúsculas.
+                string patron = PatronLike(busqueda.Trim());
+                consulta = consulta.Where(p => EF.Functions.Like(p.Nombre, patron, "\\")
+                    || (p.Descripcion != null && EF.Functions.Like(p.Descripcion, patron, "\\")));
             }
 
-            if (tamanoPagina <= 0)
+            if (categoriaId.HasValue)
             {
-                throw new ArgumentException("El tamaño de página debe ser mayor a 0.", nameof(tamanoPagina));
+                consulta = consulta.Where(p => p.CategoriaId == categoriaId.Value);
             }
 
-            if (tamanoPagina > 100)
+            if (soloDisponibles)
             {
-                throw new ArgumentException("El tamaño de página no puede superar el límite máximo de 100 elementos.", nameof(tamanoPagina));
+                consulta = consulta.Where(p => p.Stock > 0);
             }
 
-            // AsNoTracking: consulta de solo lectura. Include: carga la categoría.
-            var consulta = _contexto.Productos
-                .AsNoTracking()
-                .Include(p => p.Categoria);
-
-            // Total de elementos (para calcular el total de páginas).
-            int totalElementos = await consulta.CountAsync(cancellationToken);
-
-            // Total de páginas, redondeando hacia arriba.
-            int totalPaginas = (int)Math.Ceiling(totalElementos / (double)tamanoPagina);
-
-            // Skip: salta las páginas anteriores. Take: toma la página actual.
-            // ToListAsync: materializa la consulta.
-            var elementos = await consulta
-                .Skip((pagina - 1) * tamanoPagina)
-                .Take(tamanoPagina)
-                .ToListAsync(cancellationToken);
-
-            return new ResultadoPaginadoDto<Producto>
+            // El desempate por id mantiene estable el orden entre páginas.
+            var ordenada = (orden?.Trim().ToLowerInvariant()) switch
             {
-                PaginaActual = pagina,
-                TamanoPagina = tamanoPagina,
-                TotalElementos = totalElementos,
-                TotalPaginas = totalPaginas,
-                Elementos = elementos
+                "precio_asc" => consulta.OrderBy(p => p.Precio).ThenBy(p => p.ProductoId),
+                "precio_desc" => consulta.OrderByDescending(p => p.Precio).ThenBy(p => p.ProductoId),
+                "recientes" => consulta.OrderByDescending(p => p.ProductoId),
+                _ => consulta.OrderBy(p => p.Nombre).ThenBy(p => p.ProductoId)
             };
+
+            return await Paginacion.PaginarAsync(Proyectar(ordenada), pagina, tamanoPagina, cancellationToken);
         }
 
         // Método de compatibilidad para consultas completas
@@ -77,20 +79,20 @@ private readonly SistemaVentasDbContext _contexto;
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<Producto?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default)
+        public async Task<ResponseProductoDTO?> ObtenerPorIdAsync(int id, CancellationToken cancellationToken = default)
         {
-            return await _contexto.Productos
-                .AsNoTracking()
-                .Include(p => p.Categoria)
-                .FirstOrDefaultAsync(p => p.ProductoId == id, cancellationToken);
+            return await Proyectar(_contexto.Productos
+                    .AsNoTracking()
+                    .Where(p => p.ProductoId == id))
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
-        public async Task<ICollection<Producto>> ObtenerPorCategoriaAsync(int categoriaId, CancellationToken cancellationToken = default)
+        public async Task<ICollection<ResponseProductoDTO>> ObtenerPorCategoriaAsync(int categoriaId, CancellationToken cancellationToken = default)
         {
-            return await _contexto.Productos
-                .AsNoTracking()
-                .Include(p => p.Categoria)
-                .Where(p => p.CategoriaId == categoriaId)
+            return await Proyectar(_contexto.Productos
+                    .AsNoTracking()
+                    .Where(p => p.CategoriaId == categoriaId)
+                    .OrderBy(p => p.Nombre))
                 .ToListAsync(cancellationToken);
         }
 
@@ -131,6 +133,10 @@ private readonly SistemaVentasDbContext _contexto;
             };
 
             await _contexto.Productos.AddAsync(producto, cancellationToken);
+
+            // El stock con el que nace el producto queda registrado como su primer movimiento.
+            _stock.RegistrarStockInicial(producto);
+
             await _contexto.SaveChangesAsync(cancellationToken);
 
             // Cargar datos de la categoría para el retorno completo
@@ -138,16 +144,7 @@ private readonly SistemaVentasDbContext _contexto;
                 .Reference(p => p.Categoria)
                 .LoadAsync(cancellationToken);
 
-            return new ResponseProductoDTO 
-            {
-                ProductoId = producto.ProductoId,
-                Nombre = producto.Nombre,
-                Descripcion = producto.Descripcion,
-                Precio = producto.Precio, 
-                Stock = producto.Stock,
-                ImagenRuta = producto.ImagenRuta,
-                CategoriaId = producto.CategoriaId
-            };
+            return Mapear(producto);
         }
 
         public async Task<ResponseProductoDTO> ActualizarAsync(int id, CreateProductoDTO productoActualizado, CancellationToken cancellationToken = default)
@@ -186,51 +183,67 @@ private readonly SistemaVentasDbContext _contexto;
                 }
             }
 
+            // Cambiar el stock desde la edición también deja un movimiento (ajuste manual) con la diferencia.
+            int diferenciaStock = productoActualizado.Stock - productoExistente.Stock;
+
             productoExistente.Nombre = productoActualizado.Nombre;
             productoExistente.Descripcion = productoActualizado.Descripcion;
             productoExistente.Precio = productoActualizado.Precio;
-            productoExistente.Stock = productoActualizado.Stock;
             productoExistente.ImagenRuta = productoActualizado.ImagenRuta;
             productoExistente.CategoriaId = productoActualizado.CategoriaId;
 
-            await _contexto.SaveChangesAsync(cancellationToken);
+            await using var transaccion = await _contexto.Database.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                await _contexto.SaveChangesAsync(cancellationToken);
+
+                if (diferenciaStock != 0)
+                {
+                    await _stock.AjustarAsync(
+                        id,
+                        diferenciaStock,
+                        MotivosMovimiento.AjusteManual,
+                        observacion: "Edición del producto",
+                        cancellationToken: cancellationToken);
+
+                    await _contexto.SaveChangesAsync(cancellationToken);
+
+                    // El stock se cambió directamente en la base: se relee para no devolver el valor viejo.
+                    await _contexto.Entry(productoExistente).ReloadAsync(cancellationToken);
+                }
+
+                await transaccion.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaccion.RollbackAsync(cancellationToken);
+                // Las entidades de la operación fallida no deben quedar pendientes de guardarse.
+                _contexto.ChangeTracker.Clear();
+                throw;
+            }
 
             await _contexto.Entry(productoExistente)
                 .Reference(p => p.Categoria)
                 .LoadAsync(cancellationToken);
 
-            return new ResponseProductoDTO 
-            {
-                ProductoId = productoExistente.ProductoId,
-                Nombre = productoExistente.Nombre,
-                Descripcion = productoExistente.Descripcion,
-                Precio = productoExistente.Precio,
-                Stock = productoExistente.Stock,
-                ImagenRuta = productoExistente.ImagenRuta,
-                CategoriaId = productoExistente.CategoriaId
-            };
+            return Mapear(productoExistente);
         }
 
+        /// <summary>Ajusta el stock sumando (positivo) o restando (negativo) unidades, dejando el movimiento registrado.</summary>
         public async Task<bool> ActualizarStockAsync(
-            int productoId, 
-            int cantidadCambio, 
+            int productoId,
+            int cantidadCambio,
+            string? observacion = null,
             CancellationToken cancellationToken = default)
         {
-            var producto = await _contexto.Productos
-                .FirstOrDefaultAsync(p => p.ProductoId == productoId, cancellationToken);
+            await _stock.AjustarAsync(
+                productoId,
+                cantidadCambio,
+                MotivosMovimiento.AjusteManual,
+                observacion: observacion,
+                cancellationToken: cancellationToken);
 
-            if (producto == null)
-            {
-                throw new KeyNotFoundException($"No se encontró el producto con ID {productoId}.");
-            }
-
-            int nuevoStock = producto.Stock + cantidadCambio;
-            if (nuevoStock < 0)
-            {
-                throw new InvalidOperationException($"Stock insuficiente para el producto '{producto.Nombre}'. Stock actual: {producto.Stock}, Ajuste solicitado: {cantidadCambio}.");
-            }
-
-            producto.Stock = nuevoStock;
             await _contexto.SaveChangesAsync(cancellationToken);
             return true;
         }
@@ -260,16 +273,7 @@ private readonly SistemaVentasDbContext _contexto;
                 .Reference(p => p.Categoria)
                 .LoadAsync(cancellationToken);
 
-            return new ResponseProductoDTO
-            {
-                ProductoId = producto.ProductoId,
-                Nombre = producto.Nombre,
-                Descripcion = producto.Descripcion,
-                Precio = producto.Precio,
-                Stock = producto.Stock,
-                ImagenRuta = producto.ImagenRuta,
-                CategoriaId = producto.CategoriaId
-            };
+            return Mapear(producto);
         }
 
         public async Task<bool> EliminarAsync(int id, CancellationToken cancellationToken = default)
@@ -298,8 +302,14 @@ private readonly SistemaVentasDbContext _contexto;
                 throw new InvalidOperationException("No se puede eliminar el producto porque tiene ventas registradas asociadas.");
             }
 
-string? rutaImagen = producto.ImagenRuta;
+            string? rutaImagen = producto.ImagenRuta;
 
+            // Sin compras ni ventas, los únicos movimientos posibles son el stock inicial y los ajustes manuales.
+            var movimientos = await _contexto.MovimientosStock
+                .Where(m => m.ProductoId == id)
+                .ToListAsync(cancellationToken);
+
+            _contexto.MovimientosStock.RemoveRange(movimientos);
             _contexto.Productos.Remove(producto);
             await _contexto.SaveChangesAsync(cancellationToken);
 
@@ -314,6 +324,48 @@ string? rutaImagen = producto.ImagenRuta;
             }
 
             return true;
+        }
+
+        // Escapa los comodines de LIKE para que el texto buscado se tome literalmente ("50%" no debe coincidir con todo).
+        private static string PatronLike(string texto)
+        {
+            string escapado = texto
+                .Replace("\\", "\\\\")
+                .Replace("%", "\\%")
+                .Replace("_", "\\_")
+                .Replace("[", "\\[");
+
+            return $"%{escapado}%";
+        }
+
+        private static IQueryable<ResponseProductoDTO> Proyectar(IQueryable<Producto> consulta)
+        {
+            return consulta.Select(p => new ResponseProductoDTO
+            {
+                ProductoId = p.ProductoId,
+                Nombre = p.Nombre,
+                Descripcion = p.Descripcion,
+                Precio = p.Precio,
+                Stock = p.Stock,
+                ImagenRuta = p.ImagenRuta,
+                CategoriaId = p.CategoriaId,
+                Categoria = p.Categoria.Nombre
+            });
+        }
+
+        private static ResponseProductoDTO Mapear(Producto producto)
+        {
+            return new ResponseProductoDTO
+            {
+                ProductoId = producto.ProductoId,
+                Nombre = producto.Nombre,
+                Descripcion = producto.Descripcion,
+                Precio = producto.Precio,
+                Stock = producto.Stock,
+                ImagenRuta = producto.ImagenRuta,
+                CategoriaId = producto.CategoriaId,
+                Categoria = producto.Categoria?.Nombre ?? string.Empty
+            };
         }
     }
 }

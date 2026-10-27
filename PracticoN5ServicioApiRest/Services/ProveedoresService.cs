@@ -40,7 +40,9 @@ namespace PracticoN5ServicioApiRest.Services
 
             // AsNoTracking: consulta de solo lectura, sin seguimiento de cambios.
             var consulta = _contexto.Proveedores
-                .AsNoTracking();
+                .AsNoTracking()
+                .OrderBy(p => p.Nombre)
+                .ThenBy(p => p.ProveedorId);
 
             // Total de elementos (para calcular el total de páginas).
             int totalElementos = await consulta.CountAsync(cancellationToken);

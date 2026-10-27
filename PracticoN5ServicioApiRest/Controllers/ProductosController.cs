@@ -7,6 +7,7 @@ using PracticoN5ServicioApiRest.Services;
 namespace PracticoN5ServicioApiRest.Controllers
 {
     // Todas las acciones requieren un token JWT válido (401 si falta o es inválido).
+    // Cualquier usuario autenticado consulta el catálogo; solo el personal lo modifica.
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
@@ -21,16 +22,24 @@ namespace PracticoN5ServicioApiRest.Controllers
             _imagenesService = imagenesService;
         }
 
-        /// <summary>Devuelve los productos paginados (pagina y tamanoPagina por query string; defaults 1 y 10).</summary>
+        /// <summary>
+        /// Devuelve el catálogo paginado (pagina y tamanoPagina por query string; defaults 1 y 10).
+        /// Filtros opcionales: busqueda (texto), categoriaId, soloDisponibles y orden (nombre, precio_asc, precio_desc, recientes).
+        /// </summary>
         [HttpGet]
         public async Task<IActionResult> Index(
+            [FromQuery] string? busqueda = null,
+            [FromQuery] int? categoriaId = null,
+            [FromQuery] bool soloDisponibles = false,
+            [FromQuery] string? orden = null,
             [FromQuery] int pagina = 1, 
             [FromQuery] int tamanoPagina = 10, 
             CancellationToken cancellationToken = default)
         {
             try
             {
-                var productos = await _servicio.ObtenerTodosAsync(pagina, tamanoPagina, cancellationToken);
+                var productos = await _servicio.ObtenerTodosAsync(
+                    busqueda, categoriaId, soloDisponibles, orden, pagina, tamanoPagina, cancellationToken);
                 return Ok(productos);
             }
             catch (ArgumentException ex)
@@ -58,6 +67,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             return Ok(productos);
         }
 
+        [Authorize(Roles = NombresRol.Personal)]
         [HttpPost]
         public async Task<IActionResult> Crear([FromBody] CreateProductoDTO producto, CancellationToken cancellationToken = default)
         {
@@ -79,6 +89,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
+        [Authorize(Roles = NombresRol.Personal)]
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Actualizar(int id, [FromBody] CreateProductoDTO producto, CancellationToken cancellationToken = default)
         {
@@ -101,15 +112,18 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
+        /// <summary>Ajusta el stock sumando (positivo) o restando (negativo) unidades; queda registrado como ajuste manual.</summary>
+        [Authorize(Roles = NombresRol.Personal)]
         [HttpPatch("{id:int}/stock")]
         public async Task<IActionResult> ActualizarStock(
             int id, 
             [FromBody] int cantidadCambio, 
+            [FromQuery] string? observacion = null,
             CancellationToken cancellationToken = default)
         {
             try
             {
-                await _servicio.ActualizarStockAsync(id, cantidadCambio, cancellationToken);
+                await _servicio.ActualizarStockAsync(id, cantidadCambio, observacion, cancellationToken);
                 return Ok("Stock actualizado correctamente.");
             }
             catch (KeyNotFoundException ex)
@@ -122,7 +136,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
-        [Authorize]
+        [Authorize(Roles = NombresRol.Personal)]
         [HttpPost("{id:int}/imagen")]
         public async Task<IActionResult> CargarImagen(int id, IFormFile archivo, CancellationToken cancellationToken = default)
         {
@@ -151,7 +165,8 @@ namespace PracticoN5ServicioApiRest.Controllers
             }
         }
 
-        [Authorize]
+        // Las imágenes del catálogo son públicas: una etiqueta <img> no puede enviar el token JWT en un header.
+        [AllowAnonymous]
         [HttpGet("{id:int}/imagen")]
         public async Task<IActionResult> ObtenerImagen(int id, CancellationToken cancellationToken = default)
         {
@@ -176,7 +191,7 @@ namespace PracticoN5ServicioApiRest.Controllers
             return PhysicalFile(rutaFisica, _imagenesService.ObtenerContentType(producto.ImagenRuta));
         }
 
-        [Authorize(Roles = "Administrador")]
+        [Authorize(Roles = NombresRol.Administrador)]
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Eliminar(int id, CancellationToken cancellationToken = default)
         {

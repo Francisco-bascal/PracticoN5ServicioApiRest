@@ -1,4 +1,4 @@
-﻿namespace PracticoN5ServicioApiRest.DTOs
+namespace PracticoN5ServicioApiRest.DTOs
 {
     public class ResponseProductoDTO
     {
@@ -10,5 +10,7 @@
         public string? ImagenRuta { get; set; }
         public int CategoriaId { get; set; }
         public string Categoria { get; set; } = string.Empty;
+        // Atajo para el catálogo: hay unidades para vender.
+        public bool Disponible => Stock > 0;
     }
 }

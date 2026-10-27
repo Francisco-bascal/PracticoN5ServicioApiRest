@@ -8,10 +8,17 @@ namespace PracticoN5ServicioApiRest.Services
     public class ComprasService
     {
         private readonly SistemaVentasDbContext _contexto;
+        private readonly MovimientosStockService _stock;
+        private readonly UsuarioActual _usuarioActual;
 
-        public ComprasService(SistemaVentasDbContext contexto)
+        public ComprasService(
+            SistemaVentasDbContext contexto,
+            MovimientosStockService stock,
+            UsuarioActual usuarioActual)
         {
             _contexto = contexto;
+            _stock = stock;
+            _usuarioActual = usuarioActual;
         }
 
         /// <summary>Devuelve las compras paginadas.</summary>
@@ -43,7 +50,9 @@ namespace PracticoN5ServicioApiRest.Services
                 .AsNoTracking()
                 .Include(c => c.Proveedor)
                 .Include(c => c.Detalles)
-                    .ThenInclude(d => d.Producto);
+                    .ThenInclude(d => d.Producto)
+                .OrderByDescending(c => c.Fecha)
+                .ThenByDescending(c => c.CompraId);
 
             // Total de elementos (para calcular el total de páginas).
             int totalElementos = await consulta.CountAsync(cancellationToken);
@@ -91,7 +100,7 @@ namespace PracticoN5ServicioApiRest.Services
                 .ToListAsync(cancellationToken);
         }
 
-        /// <summary>Registra una compra e incrementa el stock de cada producto, todo en una transacción.</summary>
+        /// <summary>Registra una compra (entrada de mercadería) e incrementa el stock de cada producto, todo en una transacción.</summary>
         /// <param name="compraDto">Datos de la compra: proveedor, fecha opcional y líneas de detalle.</param>
         public async Task<Compra> RegistrarCompraAsync(CreateCompraDTO compraDto, CancellationToken cancellationToken = default)
         {
@@ -127,7 +136,8 @@ namespace PracticoN5ServicioApiRest.Services
                         ? DateTime.UtcNow
                         : compraDto.Fecha,
 
-                    ProveedorId = compraDto.ProveedorId
+                    ProveedorId = compraDto.ProveedorId,
+                    UsuarioId = _usuarioActual.Id
                 };
 
                 foreach (var detalleDto in compraDto.Detalles)
@@ -145,19 +155,22 @@ namespace PracticoN5ServicioApiRest.Services
                             $"El precio unitario para el producto ID {detalleDto.ProductoId} debe ser mayor a cero.");
                     }
 
-                    var producto = await _contexto.Productos
-                        .FirstOrDefaultAsync(
-                            p => p.ProductoId == detalleDto.ProductoId,
-                            cancellationToken);
+                    bool productoExiste = await _contexto.Productos
+                        .AnyAsync(p => p.ProductoId == detalleDto.ProductoId, cancellationToken);
 
-                    if (producto == null)
+                    if (!productoExiste)
                     {
                         throw new KeyNotFoundException(
                             $"No se encontró el producto con ID {detalleDto.ProductoId} para asociar al detalle de compra.");
                     }
 
-                    //Lógica de adición de stock: comprar suma stock.
-                    producto.Stock += detalleDto.Cantidad;
+                    //Lógica de adición de stock: comprar suma stock y deja un movimiento de entrada.
+                    await _stock.AjustarAsync(
+                        detalleDto.ProductoId,
+                        detalleDto.Cantidad,
+                        MotivosMovimiento.Compra,
+                        compra: compra,
+                        cancellationToken: cancellationToken);
 
                     var detalle = new DetalleCompra
                     {
@@ -193,15 +206,20 @@ namespace PracticoN5ServicioApiRest.Services
             {
                 // Ante cualquier error deshace todo y relanza la excepción.
                 await transaccion.RollbackAsync(cancellationToken);
+                // Las entidades de la operación fallida no deben quedar pendientes de guardarse.
+                _contexto.ChangeTracker.Clear();
                 throw;
             }
         }
 
-        /// <summary>Anula una compra y revierte el stock que había sumado, todo en una transacción.</summary>
+        /// <summary>
+        /// Anula una compra y revierte el stock que había sumado, todo en una transacción.
+        /// La compra no se borra: queda marcada como anulada para conservar la trazabilidad.
+        /// </summary>
         /// <param name="id">Identificador de la compra a anular.</param>
         public async Task<bool> AnularCompraAsync(int id, CancellationToken cancellationToken = default)
         {
-            // Transacción: stock, detalles y cabecera se modifican juntos.
+            // Transacción: stock y marca de anulación se modifican juntos.
             await using var transaccion = await _contexto.Database.BeginTransactionAsync(cancellationToken);
 
             try
@@ -215,29 +233,34 @@ namespace PracticoN5ServicioApiRest.Services
                     throw new KeyNotFoundException($"No se encontró la compra con ID {id}.");
                 }
 
+                if (compra.Anulada)
+                {
+                    throw new InvalidOperationException($"La compra con ID {id} ya fue anulada.");
+                }
+
                 // Revertir el stock agregado en la compra
                 foreach (var detalle in compra.Detalles)
                 {
-                    var producto = await _contexto.Productos
-                        .FirstOrDefaultAsync(p => p.ProductoId == detalle.ProductoId, cancellationToken);
-
-                    if (producto != null)
+                    try
+                    {
+                        // Descuenta del stock lo que la compra había sumado (falla si el stock ya se consumió).
+                        await _stock.AjustarAsync(
+                            detalle.ProductoId,
+                            -detalle.Cantidad,
+                            MotivosMovimiento.AnulacionCompra,
+                            compra: compra,
+                            cancellationToken: cancellationToken);
+                    }
+                    catch (StockInsuficienteException ex)
                     {
                         // Impide anular si el stock ya se consumió (quedaría negativo).
-                        if (producto.Stock < detalle.Cantidad)
-                        {
-                            throw new InvalidOperationException($"No es posible anular la compra: el stock actual de '{producto.Nombre}' ({producto.Stock}) es inferior a la cantidad comprada ({detalle.Cantidad}) a revertir.");
-                        }
-
-                        // Descuenta del stock lo que la compra había sumado.
-                        producto.Stock -= detalle.Cantidad;
+                        throw new InvalidOperationException(
+                            $"No es posible anular la compra: el stock actual de '{ex.Producto}' ({ex.StockActual}) es inferior a la cantidad comprada ({detalle.Cantidad}) a revertir.");
                     }
                 }
 
-                //Primero se eliminan los detalles para luego poder eliminar la compra.
-                //El orden es obligatorio por la restricción DeleteBehavior.Restrict.
-                _contexto.DetallesCompra.RemoveRange(compra.Detalles);
-                _contexto.Compras.Remove(compra);
+                compra.Anulada = true;
+                compra.FechaAnulacion = DateTime.UtcNow;
 
                 // Guarda y confirma los cambios.
                 await _contexto.SaveChangesAsync(cancellationToken);
@@ -247,8 +270,10 @@ namespace PracticoN5ServicioApiRest.Services
             }
             catch
             {
-                // Deshace todo (stock y eliminaciones) y relanza la excepción.
+                // Deshace todo (stock y marca de anulación) y relanza la excepción.
                 await transaccion.RollbackAsync(cancellationToken);
+                // Las entidades de la operación fallida no deben quedar pendientes de guardarse.
+                _contexto.ChangeTracker.Clear();
                 throw;
             }
         }

@@ -365,3 +365,6 @@ appsettings.Production.json
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Correos generados en modo desarrollo (sin servidor SMTP configurado)
+App_Data/

@@ -68,7 +68,14 @@ namespace PracticoN5ServicioApiRest.Migrations
                     b.Property<string>("Telefono")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("UsuarioId")
+                        .HasColumnType("int");
+
                     b.HasKey("ClienteId");
+
+                    b.HasIndex("UsuarioId")
+                        .IsUnique()
+                        .HasFilter("[UsuarioId] IS NOT NULL");
 
                     b.ToTable("Clientes");
                 });
@@ -81,15 +88,26 @@ namespace PracticoN5ServicioApiRest.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CompraId"));
 
+                    b.Property<bool>("Anulada")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FechaAnulacion")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("ProveedorId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("UsuarioId")
+                        .HasColumnType("int");
+
                     b.HasKey("CompraId");
 
                     b.HasIndex("ProveedorId");
+
+                    b.HasIndex("UsuarioId");
 
                     b.ToTable("Compras");
                 });
@@ -152,6 +170,135 @@ namespace PracticoN5ServicioApiRest.Migrations
                     b.HasIndex("VentaId");
 
                     b.ToTable("DetallesVenta");
+                });
+
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.MedioPago", b =>
+                {
+                    b.Property<int>("MedioPagoId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("MedioPagoId"));
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("RequiereTarjeta")
+                        .HasColumnType("bit");
+
+                    b.HasKey("MedioPagoId");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("MediosPago");
+
+                    b.HasData(
+                        new
+                        {
+                            MedioPagoId = 1,
+                            Nombre = "Tarjeta de crédito",
+                            RequiereTarjeta = true
+                        },
+                        new
+                        {
+                            MedioPagoId = 2,
+                            Nombre = "Tarjeta de débito",
+                            RequiereTarjeta = true
+                        },
+                        new
+                        {
+                            MedioPagoId = 3,
+                            Nombre = "Transferencia bancaria",
+                            RequiereTarjeta = false
+                        });
+                });
+
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.MovimientoStock", b =>
+                {
+                    b.Property<int>("MovimientoStockId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("MovimientoStockId"));
+
+                    b.Property<int>("Cantidad")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CompraId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Observacion")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("ProductoId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UsuarioId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("VentaId")
+                        .HasColumnType("int");
+
+                    b.HasKey("MovimientoStockId");
+
+                    b.HasIndex("CompraId");
+
+                    b.HasIndex("Fecha");
+
+                    b.HasIndex("ProductoId");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.HasIndex("VentaId");
+
+                    b.ToTable("MovimientosStock");
+                });
+
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Pago", b =>
+                {
+                    b.Property<int>("PagoId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PagoId"));
+
+                    b.Property<string>("CodigoAutorizacion")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MedioPagoId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Monto")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("VentaId")
+                        .HasColumnType("int");
+
+                    b.HasKey("PagoId");
+
+                    b.HasIndex("MedioPagoId");
+
+                    b.HasIndex("VentaId")
+                        .IsUnique();
+
+                    b.ToTable("Pagos");
                 });
 
             modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Producto", b =>
@@ -218,6 +365,145 @@ namespace PracticoN5ServicioApiRest.Migrations
                     b.ToTable("Proveedores");
                 });
 
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.RegistroAuditoria", b =>
+                {
+                    b.Property<int>("RegistroAuditoriaId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RegistroAuditoriaId"));
+
+                    b.Property<string>("Accion")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("CodigoRespuesta")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Detalle")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("DireccionIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)");
+
+                    b.Property<string>("Entidad")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("EntidadId")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Usuario")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("RegistroAuditoriaId");
+
+                    b.HasIndex("Fecha");
+
+                    b.ToTable("RegistrosAuditoria");
+                });
+
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.RegistroError", b =>
+                {
+                    b.Property<int>("RegistroErrorId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RegistroErrorId"));
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Mensaje")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Metodo")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Origen")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Ruta")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("StackTrace")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TipoExcepcion")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Usuario")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("RegistroErrorId");
+
+                    b.HasIndex("Fecha");
+
+                    b.ToTable("RegistrosError");
+                });
+
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Rol", b =>
+                {
+                    b.Property<int>("RolId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RolId"));
+
+                    b.Property<string>("Descripcion")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("RolId");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("Roles");
+
+                    b.HasData(
+                        new
+                        {
+                            RolId = 1,
+                            Descripcion = "Acceso total: usuarios, roles, registros de auditoría y errores, además de todo lo del Operador.",
+                            Nombre = "Administrador"
+                        },
+                        new
+                        {
+                            RolId = 2,
+                            Descripcion = "Personal del negocio: catálogo, stock, compras, ventas y reportes.",
+                            Nombre = "Operador"
+                        },
+                        new
+                        {
+                            RolId = 3,
+                            Descripcion = "Comprador: consulta el catálogo, usa el carrito y ve sus propios pedidos.",
+                            Nombre = "Cliente"
+                        });
+                });
+
             modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Usuario", b =>
                 {
                     b.Property<int>("UsuarioId")
@@ -226,6 +512,9 @@ namespace PracticoN5ServicioApiRest.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UsuarioId"));
 
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -233,17 +522,24 @@ namespace PracticoN5ServicioApiRest.Migrations
 
                     b.Property<string>("NombreUsuario")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Rol")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int>("RolId")
+                        .HasColumnType("int");
 
                     b.HasKey("UsuarioId");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("NombreUsuario")
+                        .IsUnique();
+
+                    b.HasIndex("RolId");
 
                     b.ToTable("Usuarios");
                 });
@@ -256,17 +552,38 @@ namespace PracticoN5ServicioApiRest.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("VentaId"));
 
+                    b.Property<bool>("Anulada")
+                        .HasColumnType("bit");
+
                     b.Property<int>("ClienteId")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("FechaAnulacion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UsuarioId")
+                        .HasColumnType("int");
+
                     b.HasKey("VentaId");
 
                     b.HasIndex("ClienteId");
 
+                    b.HasIndex("UsuarioId");
+
                     b.ToTable("Ventas");
+                });
+
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Cliente", b =>
+                {
+                    b.HasOne("PracticoN5ServicioApiRest.Models.Usuario", "Usuario")
+                        .WithOne()
+                        .HasForeignKey("PracticoN5ServicioApiRest.Models.Cliente", "UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Compra", b =>
@@ -277,7 +594,14 @@ namespace PracticoN5ServicioApiRest.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("PracticoN5ServicioApiRest.Models.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Proveedor");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("PracticoN5ServicioApiRest.Models.DetalleCompra", b =>
@@ -318,6 +642,57 @@ namespace PracticoN5ServicioApiRest.Migrations
                     b.Navigation("Venta");
                 });
 
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.MovimientoStock", b =>
+                {
+                    b.HasOne("PracticoN5ServicioApiRest.Models.Compra", "Compra")
+                        .WithMany()
+                        .HasForeignKey("CompraId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PracticoN5ServicioApiRest.Models.Producto", "Producto")
+                        .WithMany()
+                        .HasForeignKey("ProductoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PracticoN5ServicioApiRest.Models.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PracticoN5ServicioApiRest.Models.Venta", "Venta")
+                        .WithMany()
+                        .HasForeignKey("VentaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Compra");
+
+                    b.Navigation("Producto");
+
+                    b.Navigation("Usuario");
+
+                    b.Navigation("Venta");
+                });
+
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Pago", b =>
+                {
+                    b.HasOne("PracticoN5ServicioApiRest.Models.MedioPago", "MedioPago")
+                        .WithMany("Pagos")
+                        .HasForeignKey("MedioPagoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PracticoN5ServicioApiRest.Models.Venta", "Venta")
+                        .WithOne("Pago")
+                        .HasForeignKey("PracticoN5ServicioApiRest.Models.Pago", "VentaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("MedioPago");
+
+                    b.Navigation("Venta");
+                });
+
             modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Producto", b =>
                 {
                     b.HasOne("PracticoN5ServicioApiRest.Models.CategoriaProducto", "Categoria")
@@ -329,6 +704,17 @@ namespace PracticoN5ServicioApiRest.Migrations
                     b.Navigation("Categoria");
                 });
 
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Usuario", b =>
+                {
+                    b.HasOne("PracticoN5ServicioApiRest.Models.Rol", "Rol")
+                        .WithMany("Usuarios")
+                        .HasForeignKey("RolId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Rol");
+                });
+
             modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Venta", b =>
                 {
                     b.HasOne("PracticoN5ServicioApiRest.Models.Cliente", "Cliente")
@@ -337,7 +723,14 @@ namespace PracticoN5ServicioApiRest.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("PracticoN5ServicioApiRest.Models.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Cliente");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("PracticoN5ServicioApiRest.Models.CategoriaProducto", b =>
@@ -355,14 +748,26 @@ namespace PracticoN5ServicioApiRest.Migrations
                     b.Navigation("Detalles");
                 });
 
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.MedioPago", b =>
+                {
+                    b.Navigation("Pagos");
+                });
+
             modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Proveedor", b =>
                 {
                     b.Navigation("Compras");
                 });
 
+            modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Rol", b =>
+                {
+                    b.Navigation("Usuarios");
+                });
+
             modelBuilder.Entity("PracticoN5ServicioApiRest.Models.Venta", b =>
                 {
                     b.Navigation("Detalles");
+
+                    b.Navigation("Pago");
                 });
 #pragma warning restore 612, 618
         }
