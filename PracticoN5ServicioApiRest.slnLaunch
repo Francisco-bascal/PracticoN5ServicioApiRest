@@ -1,6 +1,16 @@
 [
   {
-    "Name": "API + Web (navegador)",
+    "Name": "API + tienda web (un solo proyecto)",
+    "Projects": [
+      {
+        "Path": "PracticoN5ServicioApiRest\\PracticoN5ServicioApiRest.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
+      }
+    ]
+  },
+  {
+    "Name": "API + Web con servidor de desarrollo aparte",
     "Projects": [
       {
         "Path": "PracticoN5ServicioApiRest\\PracticoN5ServicioApiRest.csproj",
@@ -9,16 +19,6 @@
       },
       {
         "Path": "PracticoN6.Frontend.Web\\PracticoN6.Frontend.Web.csproj",
-        "Action": "Start",
-        "DebugTarget": "http"
-      }
-    ]
-  },
-  {
-    "Name": "Solo API",
-    "Projects": [
-      {
-        "Path": "PracticoN5ServicioApiRest\\PracticoN5ServicioApiRest.csproj",
         "Action": "Start",
         "DebugTarget": "http"
       }

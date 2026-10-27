@@ -1,11 +1,11 @@
 // Recorrido automático de la interfaz en un navegador con tamaño de teléfono (Playwright).
-// Requiere la API en http://localhost:5276 con los datos de ejemplo y el host web en http://localhost:5190
+// Requiere la API corriendo en http://localhost:5276 con los datos de ejemplo (ella también sirve la tienda web)
 // (ver e2e/README.md). Las capturas quedan en e2e/capturas (o en CAPTURAS).
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-const WEB = process.env.WEB_URL || 'http://localhost:5190';
+const WEB = process.env.WEB_URL || 'http://localhost:5276';
 const SHOTS = process.env.CAPTURAS || path.join(__dirname, 'capturas');
 const ESC = __dirname;
 const SUFIJO = Date.now().toString(36);   // nombres únicos: el recorrido se puede repetir sobre la misma base

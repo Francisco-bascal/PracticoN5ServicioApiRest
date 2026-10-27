@@ -250,6 +250,10 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
+// Archivos de la tienda web (Blazor WebAssembly): el runtime (_framework) y los recursos estáticos (index.html, estilos, scripts).
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
 // Fuerza el redireccionamiento a HTTPS. En desarrollo se omite: el emulador/dispositivo Android llega por HTTP
 // (http://10.0.2.2:5276) y una redirección a https://localhost lo dejaría sin conexión.
 if (!app.Environment.IsDevelopment())
@@ -280,10 +284,13 @@ app.UseAuthorization();
 // Después de autenticar: el límite de errores se aplica por usuario.
 app.UseRateLimiter();
 
-//Para que redireccione a swagger
-app.MapGet("/", () => Results.Redirect("/swagger"));
-
 app.MapControllers();
+
+// La API también sirve la tienda web (PracticoN6.Frontend.Web): abrir http://localhost:5276/ muestra la aplicación, de modo que
+// para verla alcanza con iniciar un solo proyecto. Swagger sigue en /swagger. Una ruta /api/... inexistente responde 404
+// (no la página de la tienda) para no confundir a los clientes de la API.
+app.MapFallback("/api/{**ruta}", () => Results.NotFound());
+app.MapFallbackToFile("index.html");
 
 // Migraciones pendientes, administrador inicial y datos de ejemplo (según la configuración).
 await DbInitializer.InicializarAsync(app.Services);

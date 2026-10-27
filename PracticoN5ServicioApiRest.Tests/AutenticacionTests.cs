@@ -51,6 +51,16 @@ namespace PracticoN5ServicioApiRest.Tests
         }
 
         [Fact]
+        public async Task UnaRutaDeLaApiInexistente_Devuelve404_NoLaPaginaDeLaTienda()
+        {
+            // La API también sirve la tienda web como "fallback"; una ruta /api/... que no existe no debe devolver ese HTML.
+            var respuesta = await _fabrica.CreateClient().GetAsync("/api/ruta/que/no/existe");
+
+            Assert.Equal(HttpStatusCode.NotFound, respuesta.StatusCode);
+            Assert.NotEqual("text/html", respuesta.Content.Headers.ContentType?.MediaType);
+        }
+
+        [Fact]
         public async Task RutaProtegida_SinToken_Devuelve401ConMensaje()
         {
             var http = _fabrica.CreateClient();

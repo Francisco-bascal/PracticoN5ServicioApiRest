@@ -51,7 +51,7 @@ flowchart LR
         SHARED["PracticoN6.Frontend.Shared<br/>Razor Class Library:<br/>pantallas, servicios, carrito, sesión"]
         MAUI --> SHARED
     end
-    WEB["PracticoN6.Frontend.Web<br/>(Blazor WebAssembly — host de pruebas)"] --> SHARED
+    WEB["PracticoN6.Frontend.Web<br/>(Blazor WebAssembly — la sirve la propia API)"] --> SHARED
     SHARED -- "HTTP + JWT" --> API
     subgraph Servidor
         API["PracticoN5ServicioApiRest<br/>ASP.NET Core 8 Web API"]
@@ -97,14 +97,16 @@ PracticoN5ServicioApiRest.sln
 - Para la app en Android, además *Desarrollo de la interfaz de usuario de aplicaciones multiplataforma con .NET (MAUI)*, que incluye el SDK y el emulador de Android.
 - **No hace falta instalar SQL Server para probarlo**: en desarrollo la API usa por defecto una base SQLite local. Para SQL Server, ver más abajo.
 
-### Inicio rápido (ver la app en el navegador, sin emulador)
+### Inicio rápido (ver la tienda en el navegador, sin emulador)
 
 1. Abra `PracticoN5ServicioApiRest.sln` en Visual Studio.
-2. En la barra superior, elija el perfil de inicio **«API + Web (navegador)»** (viene en `PracticoN5ServicioApiRest.slnLaunch`; requiere VS 17.11 o superior). Si no aparece: clic derecho en la solución → *Configurar proyectos de inicio* → *Varios proyectos de inicio* → **Iniciar** en `PracticoN5ServicioApiRest` y en `PracticoN6.Frontend.Web`.
-3. Presione **F5**. Se abren Swagger (`http://localhost:5276/swagger`) y la tienda (`http://localhost:5190`).
+2. Deje como proyecto de inicio **`PracticoN5ServicioApiRest`** (clic derecho → *Establecer como proyecto de inicio*) y presione **F5**.
+3. Se abre el navegador en **http://localhost:5276/**: ahí está la tienda. La API y su documentación (Swagger) están en el mismo puerto: `http://localhost:5276/swagger`.
 4. Ingrese con un [usuario de ejemplo](#usuarios-de-ejemplo), por ejemplo `cliente` / `Demo1234`.
 
-Si no se abre nada, mire la ventana **Salida** / **Consola** de la API: ahí aparece el motivo (por ejemplo, un puerto ocupado). Por línea de comandos es equivalente a `dotnet run --project PracticoN5ServicioApiRest` y `dotnet run --project PracticoN6.Frontend.Web` en dos terminales.
+La API sirve la tienda web (`PracticoN6.Frontend.Web`) ella misma, así que **alcanza con iniciar un solo proyecto**. Si no se abre nada, mire la ventana **Salida** / **Consola** de la API: ahí aparece el motivo (por ejemplo, un puerto ocupado). Por línea de comandos: `dotnet run --project PracticoN5ServicioApiRest`.
+
+> La tienda web existe para desarrollar y probar sin emulador; la entrega del TP es la app Android (`PracticoN6.Frontend.Maui`), que usa las mismas pantallas.
 
 ### 1. La API
 
@@ -140,13 +142,15 @@ Por línea de comandos: `dotnet build PracticoN6.Frontend.Maui -t:Run -f net8.0-
 
 En desarrollo la API usa **HTTP**, por eso el manifiesto de Android tiene `usesCleartextTraffic="true"` y la vista web permite contenido mixto (para las imágenes del catálogo). En producción conviene servir la API por HTTPS y quitar ambos ajustes.
 
-### 3. El host web (opcional)
+### 3. La tienda web con su propio servidor (opcional)
+
+Normalmente no hace falta: la API ya la sirve (ver *Inicio rápido*). Para desarrollar la interfaz con recarga rápida puede iniciarla aparte, con la API corriendo:
 
 ```bash
 dotnet run --project PracticoN6.Frontend.Web      # http://localhost:5190
 ```
 
-Muestra las mismas pantallas en el navegador (conviene el modo dispositivo móvil de las herramientas de desarrollo). La dirección de la API se cambia en `PracticoN6.Frontend.Web/wwwroot/appsettings.json`.
+En Visual Studio, el perfil **«API + Web con servidor de desarrollo aparte»** (`PracticoN5ServicioApiRest.slnLaunch`, VS 17.11 o superior) inicia ambos proyectos. La dirección de la API que usa la tienda se cambia en `PracticoN6.Frontend.Web/wwwroot/appsettings.json` (o desde la pantalla **Servidor** de la propia app).
 
 ---
 
