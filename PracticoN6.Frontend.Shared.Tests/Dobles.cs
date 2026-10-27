@@ -9,7 +9,7 @@ namespace PracticoN6.Frontend.Shared.Tests
     {
         public Dictionary<string, string> Datos { get; } = new();
 
-        public Task<string?> LeerAsync(string clave) => Task.FromResult(Datos.TryGetValue(clave, out var v) ? v : null);
+        public virtual Task<string?> LeerAsync(string clave) => Task.FromResult(Datos.TryGetValue(clave, out var v) ? v : null);
 
         public Task GuardarAsync(string clave, string valor)
         {
@@ -21,6 +21,16 @@ namespace PracticoN6.Frontend.Shared.Tests
         {
             Datos.Remove(clave);
             return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>Almacenamiento con lectura realmente asíncrona, como el localStorage del navegador (por JS interop).</summary>
+    public class AlmacenamientoLento : AlmacenamientoEnMemoria
+    {
+        public override async Task<string?> LeerAsync(string clave)
+        {
+            await Task.Delay(15);
+            return await base.LeerAsync(clave);
         }
     }
 
@@ -56,7 +66,7 @@ namespace PracticoN6.Frontend.Shared.Tests
     /// <summary>Arma el conjunto de servicios de la tienda con dobles para el almacenamiento y el servidor.</summary>
     public class Entorno
     {
-        public AlmacenamientoEnMemoria Almacenamiento { get; } = new();
+        public AlmacenamientoEnMemoria Almacenamiento { get; }
         public ManejadorFalso Servidor { get; } = new();
         public CredencialesActuales Credenciales { get; } = new();
         public ServidorApi ServidorApi { get; }
@@ -65,8 +75,9 @@ namespace PracticoN6.Frontend.Shared.Tests
         public SesionService Sesion { get; }
         public CarritoService Carrito { get; }
 
-        public Entorno(string urlPorDefecto = "http://servidor.test:5276")
+        public Entorno(string urlPorDefecto = "http://servidor.test:5276", AlmacenamientoEnMemoria? almacenamiento = null)
         {
+            Almacenamiento = almacenamiento ?? new AlmacenamientoEnMemoria();
             ServidorApi = new ServidorApi(Almacenamiento, new OpcionesTienda { UrlApiPorDefecto = urlPorDefecto });
             Api = new ApiClient(new HttpClient(Servidor), ServidorApi, Credenciales);
             Tienda = new TiendaApi(Api);

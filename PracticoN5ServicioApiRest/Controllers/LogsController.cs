@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PracticoN5ServicioApiRest.DTOs;
 using PracticoN5ServicioApiRest.Infraestructura;
 using PracticoN5ServicioApiRest.Models;
@@ -71,6 +72,7 @@ namespace PracticoN5ServicioApiRest.Controllers
 
         /// <summary>La aplicación móvil informa un error capturado del lado del cliente.</summary>
         [NoAuditar]
+        [EnableRateLimiting("errores")]
         [HttpPost("errores")]
         public async Task<IActionResult> InformarError(
             [FromBody] ErrorClienteDTO error,

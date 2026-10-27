@@ -352,8 +352,9 @@ namespace PracticoN5ServicioApiRest.Services
             return usuario;
         }
 
-        // Asocia la cuenta a un cliente que ya existía con ese correo (cargado antes por el personal) o crea uno nuevo.
-        private async Task VincularClienteAsync(
+        // Crea el perfil de cliente de la cuenta. NO se reutiliza un cliente existente con el mismo correo: sin verificar que
+        // el correo pertenece a quien se registra, enlazarlo le daría acceso al historial de otra persona.
+        private Task VincularClienteAsync(
             Usuario usuario,
             string? nombre,
             string? apellido,
@@ -361,17 +362,6 @@ namespace PracticoN5ServicioApiRest.Services
             string? direccion,
             CancellationToken cancellationToken)
         {
-            var existente = await _contexto.Clientes
-                .FirstOrDefaultAsync(
-                    c => c.UsuarioId == null && c.Email != null && c.Email.ToLower() == usuario.Email.ToLower(),
-                    cancellationToken);
-
-            if (existente != null)
-            {
-                existente.Usuario = usuario;
-                return;
-            }
-
             _contexto.Clientes.Add(new Cliente
             {
                 Nombre = string.IsNullOrWhiteSpace(nombre) ? usuario.NombreUsuario : nombre,
@@ -381,6 +371,8 @@ namespace PracticoN5ServicioApiRest.Services
                 Email = usuario.Email,
                 Usuario = usuario
             });
+
+            return Task.CompletedTask;
         }
 
         private async Task<Rol> ObtenerRolAsync(string nombreRol, CancellationToken cancellationToken)

@@ -45,24 +45,35 @@ namespace PracticoN6.Frontend.Shared.Services
         public decimal Total => _items.Sum(i => i.Subtotal);
         public bool EstaVacio => _items.Count == 0;
 
+        /// <summary>
+        /// Carga el carrito guardado del usuario actual. Puede invocarse varias veces a la vez (al iniciar sesión se dispara
+        /// desde dos lugares): por eso lee primero y recién después reemplaza el contenido, sin ningún await en el medio.
+        /// </summary>
         public async Task CargarAsync()
         {
-            _items.Clear();
-            _usuario = _sesion.NombreUsuario;
+            string? usuario = _sesion.NombreUsuario;
+            var guardados = new List<ItemCarrito>();
 
-            if (_usuario != null)
+            if (usuario != null)
             {
                 try
                 {
-                    string? json = await _preferencias.LeerAsync(Clave(_usuario));
-                    var guardados = string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<List<ItemCarrito>>(json, OpcionesJson);
-                    _items.AddRange(guardados ?? new List<ItemCarrito>());
+                    string? json = await _preferencias.LeerAsync(Clave(usuario));
+
+                    if (!string.IsNullOrEmpty(json))
+                    {
+                        guardados = JsonSerializer.Deserialize<List<ItemCarrito>>(json, OpcionesJson) ?? new List<ItemCarrito>();
+                    }
                 }
                 catch (Exception)
                 {
                     // Un carrito guardado ilegible se descarta: empieza vacío.
                 }
             }
+
+            _usuario = usuario;
+            _items.Clear();
+            _items.AddRange(guardados);
 
             Cambio?.Invoke();
         }

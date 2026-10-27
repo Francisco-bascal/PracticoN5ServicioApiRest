@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -176,6 +178,27 @@ namespace PracticoN5ServicioApiRest.Tests
             var respuesta = await _fabrica.CreateClient().GetAsync("/api/Usuarios/test");
 
             Assert.Equal("nosniff", respuesta.Headers.GetValues("X-Content-Type-Options").Single());
+        }
+
+        [Fact]
+        public async Task LosInformesDeErrorDeLaApp_TienenLimiteDeFrecuenciaPorUsuario()
+        {
+            var limitada = _fabrica.WithWebHostBuilder(host => host.ConfigureAppConfiguration((_, configuracion) =>
+                configuracion.AddInMemoryCollection(new Dictionary<string, string?> { ["RateLimit:ErroresPorMinuto"] = "3" })));
+            var cliente = limitada.CreateClient();
+            await cliente.IniciarSesionAsync("cliente", TiendaFactory.PasswordDemo);
+            var otro = limitada.CreateClient();
+            await otro.IniciarSesionAsync("operador", TiendaFactory.PasswordDemo);
+
+            var respuestas = new List<HttpStatusCode>();
+            for (int i = 0; i < 5; i++)
+            {
+                respuestas.Add((await cliente.PostAsJsonAsync("/api/Logs/errores", new { mensaje = $"error {i}" })).StatusCode);
+            }
+
+            Assert.Equal(new[] { HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.TooManyRequests, HttpStatusCode.TooManyRequests }, respuestas);
+            // El límite es por usuario: otro usuario no se ve afectado.
+            Assert.Equal(HttpStatusCode.OK, (await otro.PostAsJsonAsync("/api/Logs/errores", new { mensaje = "otro" })).StatusCode);
         }
 
         [Fact]

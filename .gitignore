@@ -368,3 +368,7 @@ FodyWeavers.xsd
 
 # Correos generados en modo desarrollo (sin servidor SMTP configurado)
 App_Data/
+
+# Imágenes subidas por los usuarios en tiempo de ejecución (se conserva solo la de ejemplo)
+PracticoN5ServicioApiRest/wwwroot/Uploads/*
+!PracticoN5ServicioApiRest/wwwroot/Uploads/3060.webp

@@ -130,6 +130,10 @@ namespace PracticoN5ServicioApiRest.Controllers
             {
                 return NotFound(ex.Message);
             }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(ex.Message);

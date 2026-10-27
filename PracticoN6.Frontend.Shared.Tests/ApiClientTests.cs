@@ -155,6 +155,39 @@ namespace PracticoN6.Frontend.Shared.Tests
         }
 
         [Fact]
+        public async Task ProbarLaConexion_FuncionaConLaRespuestaDeTextoPlanoDelEndpointDeEstado()
+        {
+            var entorno = new Entorno();
+            entorno.Servidor.Respuesta = _ => ManejadorFalso.Texto("API funcionando", HttpStatusCode.OK);
+
+            await entorno.Tienda.ProbarConexionAsync();
+
+            Assert.Equal("http://servidor.test:5276/api/Usuarios/test", entorno.Servidor.Peticiones.Single().RequestUri!.ToString());
+        }
+
+        [Fact]
+        public async Task ProbarLaConexion_InformaElErrorSiElServidorNoResponde()
+        {
+            var entorno = new Entorno();
+            entorno.Servidor.Falla = new HttpRequestException("Connection refused");
+
+            var ex = await Assert.ThrowsAsync<ApiException>(() => entorno.Tienda.ProbarConexionAsync());
+
+            Assert.Contains("No se pudo conectar", ex.Message);
+        }
+
+        [Fact]
+        public async Task UnaRespuestaDeTextoPlanoDondeSeEsperabaJson_NoRompeLaAppConUnaExcepcionInesperada()
+        {
+            var entorno = new Entorno();
+            entorno.Servidor.Respuesta = _ => ManejadorFalso.Texto("API funcionando", HttpStatusCode.OK);
+
+            var ex = await Assert.ThrowsAsync<ApiException>(() => entorno.Api.GetAsync<string>("api/x"));
+
+            Assert.Contains("interpretar", ex.Message);
+        }
+
+        [Fact]
         public async Task LaDireccionDelServidorSePuedeCambiarEnCaliente()
         {
             var entorno = new Entorno("http://uno.test");

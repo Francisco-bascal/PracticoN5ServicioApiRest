@@ -26,6 +26,21 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await page.waitForSelector('text=Ingrese para ver el catálogo', { timeout: 60000 });
   await paso('01-login');
 
+  // Pantalla "Servidor": guardar y probar la conexión con la API.
+  await page.click('a:has-text("Servidor:")');
+  await page.waitForSelector('h1:has-text("Servidor")');
+  await page.click('button:has-text("Guardar y probar")');
+  await page.waitForSelector('.alerta-exito:has-text("Conexión correcta")');
+  await paso('01b-servidor');
+  await page.fill('#url', 'http://localhost:9');
+  await page.click('button:has-text("Guardar y probar")');
+  await page.waitForSelector('.alerta-error:has-text("No se pudo conectar")');
+  await paso('01c-servidor-error');
+  await page.click('button:has-text("Restablecer")');
+  await page.waitForSelector('.alerta-exito:has-text("predeterminada")');
+  await page.goto(WEB);
+  await page.waitForSelector('text=Ingrese para ver el catálogo');
+
   // Credenciales incorrectas
   await page.fill('#usuario', 'cliente');
   await page.fill('#password', 'mala');

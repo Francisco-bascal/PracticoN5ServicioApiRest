@@ -248,6 +248,23 @@ namespace PracticoN6.Frontend.Shared.Tests
         }
 
         [Fact]
+        public async Task CargarElCarritoVariasVecesAlMismoTiempo_NoDuplicaLosItems()
+        {
+            // Al iniciar sesión el carrito se carga desde dos lugares a la vez; con un almacenamiento realmente asíncrono
+            // (como el del navegador) las lecturas se superponen.
+            var entorno = new Entorno(almacenamiento: new AlmacenamientoLento());
+            await entorno.IniciarSesionComoAsync("ana");
+            entorno.Almacenamiento.Datos["carrito.ana"] =
+                """[{"productoId":1,"nombre":"A","precioUnitario":10,"cantidad":2,"stock":5}]""";
+
+            await Task.WhenAll(entorno.Carrito.CargarAsync(), entorno.Carrito.CargarAsync(), entorno.Carrito.CargarAsync());
+
+            var item = Assert.Single(entorno.Carrito.Items);
+            Assert.Equal(2, item.Cantidad);
+            Assert.Equal(20m, entorno.Carrito.Total);
+        }
+
+        [Fact]
         public async Task ElCarritoSobreviveAlReinicioDeLaApp()
         {
             var primera = await ConSesionAsync("ana");

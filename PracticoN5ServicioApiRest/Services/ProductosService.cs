@@ -237,14 +237,28 @@ namespace PracticoN5ServicioApiRest.Services
             string? observacion = null,
             CancellationToken cancellationToken = default)
         {
-            await _stock.AjustarAsync(
-                productoId,
-                cantidadCambio,
-                MotivosMovimiento.AjusteManual,
-                observacion: observacion,
-                cancellationToken: cancellationToken);
+            // El stock y su movimiento se confirman juntos: nunca queda uno sin el otro.
+            await using var transaccion = await _contexto.Database.BeginTransactionAsync(cancellationToken);
 
-            await _contexto.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _stock.AjustarAsync(
+                    productoId,
+                    cantidadCambio,
+                    MotivosMovimiento.AjusteManual,
+                    observacion: observacion,
+                    cancellationToken: cancellationToken);
+
+                await _contexto.SaveChangesAsync(cancellationToken);
+                await transaccion.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaccion.RollbackAsync(cancellationToken);
+                _contexto.ChangeTracker.Clear();
+                throw;
+            }
+
             return true;
         }
 

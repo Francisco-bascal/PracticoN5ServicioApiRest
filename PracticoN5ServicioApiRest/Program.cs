@@ -6,6 +6,7 @@ using Microsoft.OpenApi.Models;
 using PracticoN5ServicioApiRest.Data;
 using PracticoN5ServicioApiRest.Infraestructura;
 using PracticoN5ServicioApiRest.Services;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -112,25 +113,36 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Límite de intentos de inicio de sesión por dirección IP (frena los ataques de fuerza bruta sobre las contraseñas).
-int intentosLoginPorMinuto = builder.Configuration.GetValue<int?>("RateLimit:LoginPorMinuto") ?? 20;
+// Límites de frecuencia. El tope se lee de la configuración al atender cada petición (no al arrancar).
+// "login": intentos de inicio de sesión por IP (frena la fuerza bruta sobre las contraseñas).
+// "errores": informes de error de la app por usuario (evita que alguien llene el registro de errores).
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     options.AddPolicy("login", contexto =>
-        RateLimitPartition.GetFixedWindowLimiter(
+    {
+        int limite = contexto.RequestServices.GetRequiredService<IConfiguration>().GetValue<int?>("RateLimit:LoginPorMinuto") ?? 20;
+
+        return RateLimitPartition.GetFixedWindowLimiter(
             contexto.Connection.RemoteIpAddress?.ToString() ?? "desconocida",
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = intentosLoginPorMinuto,
-                Window = TimeSpan.FromMinutes(1)
-            }));
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = limite, Window = TimeSpan.FromMinutes(1) });
+    });
+
+    options.AddPolicy("errores", contexto =>
+    {
+        int limite = contexto.RequestServices.GetRequiredService<IConfiguration>().GetValue<int?>("RateLimit:ErroresPorMinuto") ?? 30;
+        string clave = contexto.User.Identity?.Name ?? contexto.Connection.RemoteIpAddress?.ToString() ?? "desconocida";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            clave,
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = limite, Window = TimeSpan.FromMinutes(1) });
+    });
 
     options.OnRejected = async (contexto, cancellationToken) =>
     {
         await contexto.HttpContext.Response.WriteAsJsonAsync(
-            new { mensaje = "Demasiados intentos de inicio de sesión. Espere un minuto e intente nuevamente." },
+            new { mensaje = "Demasiados intentos. Espere un minuto e intente nuevamente." },
             cancellationToken);
     };
 });
@@ -164,6 +176,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         // Respuestas JSON en español en lugar de los mensajes genéricos de ASP.NET Core.
         options.Events = new JwtBearerEvents
         {
+            // El token solo prueba quién era el usuario al iniciar sesión. Se verifica contra la base que siga existiendo,
+            // esté activo y conserve el mismo rol: así desactivar a alguien o cambiarle el rol rige de inmediato
+            // (y no recién cuando el token venza).
+            OnTokenValidated = async context =>
+            {
+                var principal = context.Principal;
+
+                if (!int.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out int usuarioId))
+                {
+                    context.Fail("El token no identifica a ningún usuario.");
+                    return;
+                }
+
+                var baseDatos = context.HttpContext.RequestServices.GetRequiredService<SistemaVentasDbContext>();
+
+                var actual = await baseDatos.Usuarios
+                    .AsNoTracking()
+                    .Where(u => u.UsuarioId == usuarioId)
+                    .Select(u => new { u.Activo, Rol = u.Rol.Nombre })
+                    .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
+
+                if (actual == null || !actual.Activo || actual.Rol != principal!.FindFirstValue(ClaimTypes.Role))
+                {
+                    context.Fail("La sesión ya no es válida.");
+                }
+            },
+
             // Autenticación fallida: token faltante, inválido o expirado en un [Authorize].
             OnChallenge = async context =>
             {
@@ -221,12 +260,13 @@ app.UseCors("Permissive");
 // Va después de CORS para que esa respuesta de error también lleve los headers de CORS.
 app.UseMiddleware<ManejoErroresMiddleware>();
 
-app.UseRateLimiter();
-
 // Orden obligatorio: UseAuthentication valida el token y construye la identidad del usuario;
 // UseAuthorization evalúa los [Authorize] en base a esa identidad. Deben ir en ese orden.
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Después de autenticar: el límite de errores se aplica por usuario.
+app.UseRateLimiter();
 
 //Para que redireccione a swagger
 app.MapGet("/", () => Results.Redirect("/swagger"));

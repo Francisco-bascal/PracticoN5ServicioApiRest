@@ -41,7 +41,11 @@ namespace PracticoN5ServicioApiRest.Tests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             Directory.CreateDirectory(Path.Combine(CarpetaContenido, "wwwroot"));
-            _conexion.Open();
+            // Los hosts derivados (WithWebHostBuilder) vuelven a pasar por acá y comparten la misma base en memoria.
+            if (_conexion.State != System.Data.ConnectionState.Open)
+            {
+                _conexion.Open();
+            }
 
             builder.UseContentRoot(CarpetaContenido);
 
@@ -78,13 +82,7 @@ namespace PracticoN5ServicioApiRest.Tests
         public async Task<HttpClient> ClienteAsync(string usuario, string password)
         {
             var http = CreateClient();
-
-            var respuesta = await http.PostAsJsonAsync("/api/Usuarios/login", new { nombreUsuario = usuario, password });
-            respuesta.EnsureSuccessStatusCode();
-
-            var login = await respuesta.Content.ReadFromJsonAsync<LoginDto>();
-            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
-
+            await http.IniciarSesionAsync(usuario, password);
             return http;
         }
 

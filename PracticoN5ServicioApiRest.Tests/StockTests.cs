@@ -86,6 +86,19 @@ namespace PracticoN5ServicioApiRest.Tests
         }
 
         [Fact]
+        public async Task UnaObservacionDemasiadoLarga_SeRechazaSinTocarElStock()
+        {
+            var operador = await _fabrica.OperadorAsync();
+            int id = await operador.CrearProductoAsync(stock: 10);
+
+            var respuesta = await operador.PatchAsJsonAsync($"/api/Productos/{id}/stock?observacion={new string('x', 201)}", -3);
+
+            Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+            Assert.Equal(10, (await operador.ObtenerProductoAsync(id)).Stock);
+            Assert.Single(await operador.MovimientosAsync(id));   // solo el stock inicial
+        }
+
+        [Fact]
         public async Task UnaCompra_SumaStockYRegistraLaEntradaConSuUsuario()
         {
             var operador = await _fabrica.OperadorAsync();

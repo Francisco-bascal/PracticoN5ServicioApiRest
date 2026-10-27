@@ -33,7 +33,8 @@ namespace PracticoN6.Frontend.Shared.Services
 
         public Task<Perfil> ActualizarPerfilAsync(FormularioPerfil f) => _api.PutAsync<Perfil>("api/Usuarios/yo", f);
 
-        public async Task ProbarConexionAsync() => await _api.GetAsync<string>("api/Usuarios/test");
+        // El endpoint de estado responde texto plano ("API funcionando"), no JSON.
+        public async Task ProbarConexionAsync() => await _api.GetTextoAsync("api/Usuarios/test");
 
         // ---- Catálogo ----
 

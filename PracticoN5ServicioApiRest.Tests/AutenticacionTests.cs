@@ -152,20 +152,35 @@ namespace PracticoN5ServicioApiRest.Tests
         }
 
         [Fact]
-        public async Task Registro_VinculaAlClienteQueYaCargoElPersonalConEseCorreo()
+        public async Task Registro_NuncaEnlazaLaCuentaConUnClienteExistenteAunqueCoincidaElCorreo()
         {
+            // El personal cargó a "Juan" con su historial. Quien se registre con ese correo (sin verificarlo) no debe heredarlo.
             var operador = await _fabrica.OperadorAsync();
             var existente = await (await operador.PostAsJsonAsync("/api/Clientes", new { nombre = "Juan", apellido = "Gómez", email = "juan.gomez@example.com" })).LeerAsync<ClienteDto>();
 
             var http = _fabrica.CreateClient();
-            await http.PostAsJsonAsync("/api/Usuarios/registro", new { nombreUsuario = "juan.gomez", email = "juan.gomez@example.com", password = "secreta1" });
+            await http.PostAsJsonAsync("/api/Usuarios/registro", new { nombreUsuario = "impostor", email = "juan.gomez@example.com", password = "secreta1" });
 
-            var cuenta = await _fabrica.ClienteAsync("juan.gomez", "secreta1");
+            var cuenta = await _fabrica.ClienteAsync("impostor", "secreta1");
             var perfil = await (await cuenta.GetAsync("/api/Usuarios/yo")).LeerAsync<JsonElement>();
 
-            // Se reutiliza el cliente existente en lugar de duplicarlo.
-            Assert.Equal(existente.ClienteId, perfil.GetProperty("clienteId").GetInt32());
-            Assert.Equal("Juan", perfil.GetProperty("nombre").GetString());
+            Assert.NotEqual(existente.ClienteId, perfil.GetProperty("clienteId").GetInt32());
+            Assert.NotEqual("Juan", perfil.GetProperty("nombre").GetString());
+        }
+
+        [Fact]
+        public async Task ElPersonalNoPuedeEnlazarUnClienteAUnaCuentaDesdeElCuerpoDeLaPeticion()
+        {
+            var operador = await _fabrica.OperadorAsync();
+            var admin = await _fabrica.AdminAsync();
+            var usuarios = await (await admin.GetAsync("/api/Usuarios")).LeerAsync<List<JsonElement>>();
+            int idAdmin = usuarios.First(u => u.GetProperty("nombreUsuario").GetString() == "admin").GetProperty("usuarioId").GetInt32();
+
+            // usuarioId no forma parte del contrato de entrada: se ignora.
+            await operador.PostAsJsonAsync("/api/Clientes", new { nombre = "Intento", email = "intento@example.com", usuarioId = idAdmin });
+
+            var perfilAdmin = await (await admin.GetAsync("/api/Usuarios/yo")).LeerAsync<JsonElement>();
+            Assert.Equal(JsonValueKind.Null, perfilAdmin.GetProperty("clienteId").ValueKind);
         }
 
         [Fact]
@@ -185,6 +200,52 @@ namespace PracticoN5ServicioApiRest.Tests
             await admin.PutAsJsonAsync($"/api/Usuarios/{id}", new { nombreUsuario = "temporal", email = "temporal@example.com", rol = "Operador", activo = true });
             var permitido = await http.PostAsJsonAsync("/api/Usuarios/login", new { nombreUsuario = "temporal", password = "secreta1" });
             Assert.Equal(HttpStatusCode.OK, permitido.StatusCode);
+        }
+
+        [Fact]
+        public async Task UnTokenYaEmitido_DejaDeValerCuandoSeDesactivaAlUsuario()
+        {
+            var admin = await _fabrica.AdminAsync();
+            var creado = await (await admin.PostAsJsonAsync("/api/Usuarios", new { nombreUsuario = "cesante", email = "cesante@example.com", password = "secreta1", rol = "Operador" })).LeerAsync<JsonElement>();
+            int id = creado.GetProperty("usuarioId").GetInt32();
+            var sesion = await _fabrica.ClienteAsync("cesante", "secreta1");
+            Assert.Equal(HttpStatusCode.OK, (await sesion.GetAsync("/api/Clientes")).StatusCode);
+
+            await admin.PutAsJsonAsync($"/api/Usuarios/{id}", new { nombreUsuario = "cesante", email = "cesante@example.com", rol = "Operador", activo = false });
+
+            // El token sigue vigente por fecha, pero el usuario ya no puede usarlo.
+            Assert.Equal(HttpStatusCode.Unauthorized, (await sesion.GetAsync("/api/Clientes")).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await sesion.GetAsync("/api/Productos")).StatusCode);
+        }
+
+        [Fact]
+        public async Task UnTokenYaEmitido_DejaDeValerCuandoCambiaElRolDelUsuario()
+        {
+            var admin = await _fabrica.AdminAsync();
+            var creado = await (await admin.PostAsJsonAsync("/api/Usuarios", new { nombreUsuario = "degradado", email = "degradado@example.com", password = "secreta1", rol = "Operador" })).LeerAsync<JsonElement>();
+            var sesionVieja = await _fabrica.ClienteAsync("degradado", "secreta1");
+            Assert.Equal(HttpStatusCode.OK, (await sesionVieja.GetAsync("/api/Clientes")).StatusCode);
+
+            await admin.PutAsJsonAsync($"/api/Usuarios/{creado.GetProperty("usuarioId").GetInt32()}", new { nombreUsuario = "degradado", email = "degradado@example.com", rol = "Cliente" });
+
+            Assert.Equal(HttpStatusCode.Unauthorized, (await sesionVieja.GetAsync("/api/Clientes")).StatusCode);
+
+            // Con una sesión nueva rige el rol nuevo: ya no accede al personal.
+            var sesionNueva = await _fabrica.ClienteAsync("degradado", "secreta1");
+            Assert.Equal(HttpStatusCode.Forbidden, (await sesionNueva.GetAsync("/api/Clientes")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await sesionNueva.GetAsync("/api/Productos")).StatusCode);
+        }
+
+        [Fact]
+        public async Task UnTokenYaEmitido_DejaDeValerCuandoSeEliminaAlUsuario()
+        {
+            var admin = await _fabrica.AdminAsync();
+            var creado = await (await admin.PostAsJsonAsync("/api/Usuarios", new { nombreUsuario = "eliminado", email = "eliminado@example.com", password = "secreta1", rol = "Operador" })).LeerAsync<JsonElement>();
+            var sesion = await _fabrica.ClienteAsync("eliminado", "secreta1");
+
+            await admin.DeleteAsync($"/api/Usuarios/{creado.GetProperty("usuarioId").GetInt32()}");
+
+            Assert.Equal(HttpStatusCode.Unauthorized, (await sesion.GetAsync("/api/Productos")).StatusCode);
         }
     }
 }

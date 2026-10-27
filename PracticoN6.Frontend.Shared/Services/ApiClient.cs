@@ -48,6 +48,13 @@ namespace PracticoN6.Frontend.Shared.Services
         public Task<T> GetAsync<T>(string ruta, CancellationToken cancellationToken = default)
             => LeerAsync<T>(HttpMethod.Get, ruta, null, cancellationToken);
 
+        /// <summary>Para los endpoints que responden texto plano (no JSON), como el de estado de la API.</summary>
+        public async Task<string> GetTextoAsync(string ruta, CancellationToken cancellationToken = default)
+        {
+            using var respuesta = await EnviarAsync(HttpMethod.Get, ruta, null, cancellationToken);
+            return await respuesta.Content.ReadAsStringAsync(cancellationToken);
+        }
+
         public Task<T> PostAsync<T>(string ruta, object? cuerpo = null, CancellationToken cancellationToken = default)
             => LeerAsync<T>(HttpMethod.Post, ruta, Contenido(cuerpo), cancellationToken);
 
@@ -109,8 +116,9 @@ namespace PracticoN6.Frontend.Shared.Services
                 var valor = await respuesta.Content.ReadFromJsonAsync<T>(OpcionesJson, cancellationToken);
                 return valor ?? throw new ApiException((int)respuesta.StatusCode, "El servidor devolvió una respuesta vacía.");
             }
-            catch (JsonException)
+            catch (Exception ex) when (ex is JsonException or NotSupportedException)
             {
+                // JsonException: el cuerpo no tiene la forma esperada. NotSupportedException: no es JSON (por ejemplo, texto plano).
                 throw new ApiException((int)respuesta.StatusCode, "El servidor devolvió una respuesta que la aplicación no pudo interpretar.");
             }
         }

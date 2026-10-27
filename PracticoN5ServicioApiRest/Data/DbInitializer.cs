@@ -34,7 +34,16 @@ namespace PracticoN5ServicioApiRest.Data
 
             if (configuracion.GetValue<bool>("Seed:DatosDemo"))
             {
-                await SembrarDatosDemoAsync(contexto, configuracion, logger, cancellationToken);
+                // Los datos de ejemplo traen usuarios con contraseñas conocidas: nunca se cargan en producción,
+                // aunque la configuración (por ejemplo, copiada de la plantilla) lo pida.
+                if (scope.ServiceProvider.GetRequiredService<IHostEnvironment>().IsProduction())
+                {
+                    logger.LogWarning("Seed:DatosDemo se ignora en el entorno Production.");
+                }
+                else
+                {
+                    await SembrarDatosDemoAsync(contexto, configuracion, logger, cancellationToken);
+                }
             }
         }
 

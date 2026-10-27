@@ -78,9 +78,9 @@ PracticoN5ServicioApiRest.sln
 │   ├── Infraestructura/                filtro de auditoría y middleware de errores
 │   ├── Migrations/                     migraciones EF Core (la nueva: Tp6BlazorHybrid)
 │   └── appsettings.example.json        plantilla de configuración
-├── PracticoN5ServicioApiRest.Tests/    160 pruebas de integración de la API
+├── PracticoN5ServicioApiRest.Tests/    167 pruebas de integración de la API
 ├── PracticoN6.Frontend.Shared/         UI y lógica del frontend (Razor Class Library)
-├── PracticoN6.Frontend.Shared.Tests/   63 pruebas unitarias del frontend
+├── PracticoN6.Frontend.Shared.Tests/   67 pruebas unitarias del frontend
 ├── PracticoN6.Frontend.Maui/           app Android (.NET MAUI + Blazor Hybrid)
 ├── PracticoN6.Frontend.Web/            host web (Blazor WebAssembly) para desarrollo y pruebas
 └── e2e/                                recorridos automáticos de la interfaz (Playwright)
@@ -182,7 +182,14 @@ El registro público crea siempre un **Cliente**; los roles del personal los oto
 | Usuarios y roles (alta, cambio de rol, activar/desactivar, baja) | — | — | ✅ |
 | Auditoría y registro de errores | — | — | ✅ |
 
-Reglas adicionales: no se puede degradar, desactivar ni eliminar al **único administrador**; nadie puede desactivarse o eliminarse a sí mismo; un usuario con historial (ventas, compras o movimientos) no se elimina sino que se **desactiva**; un cliente solo accede a *sus* ventas (las ajenas devuelven 404). El inicio de sesión tiene un límite de intentos por IP.
+Reglas adicionales:
+
+- No se puede degradar, desactivar ni eliminar al **único administrador**; nadie puede desactivarse o eliminarse a sí mismo.
+- Un usuario con historial (ventas, compras o movimientos) no se elimina sino que se **desactiva**.
+- Un cliente solo accede a *sus* ventas (las ajenas devuelven 404).
+- **El token se revalida contra la base en cada petición**: si se desactiva o elimina al usuario, o se le cambia el rol, su token deja de valer de inmediato (401) y la app le pide iniciar sesión de nuevo. Cuesta una consulta por petición.
+- Límites de frecuencia: inicio de sesión (por IP) e informes de error de la app (por usuario).
+- Al registrarse siempre se crea un perfil de cliente **nuevo**: no se reutiliza un cliente cargado por el personal aunque coincida el correo (no hay verificación de correo, y enlazarlo daría acceso al historial de otra persona).
 
 ---
 
@@ -295,10 +302,10 @@ Ver `PracticoN5ServicioApiRest/appsettings.example.json`.
 | `Database:AplicarMigraciones` | Aplica las migraciones al arrancar |
 | `Database:Proveedor` / `Database:CrearEsquema` | `Sqlite` / `true` solo para el modo demostración |
 | `Seed:AdminUsuario`, `Seed:AdminEmail`, `Seed:AdminPassword` | Administrador inicial (se crea solo si no existe ninguno; sin contraseña no se crea) |
-| `Seed:DatosDemo`, `Seed:PasswordDemo` | Catálogo y usuarios `operador`/`cliente` de ejemplo |
+| `Seed:DatosDemo`, `Seed:PasswordDemo` | Catálogo y usuarios `operador`/`cliente` de ejemplo (**se ignora en el entorno `Production`**) |
 | `Negocio:Nombre`, `Negocio:ZonaHoraria` | Encabezado de los PDF y zona horaria de los reportes |
 | `Inventario:StockMinimo` | Umbral de "stock bajo" del reporte |
-| `RateLimit:LoginPorMinuto` | Intentos de login por minuto y por IP |
+| `RateLimit:LoginPorMinuto`, `RateLimit:ErroresPorMinuto` | Intentos de login por minuto y por IP; informes de error de la app por minuto y por usuario |
 | `Smtp:Host`, `Puerto`, `UsarSsl`, `Usuario`, `Password`, `Remitente`, `NombreRemitente` | Envío de correos |
 
 ---
@@ -307,8 +314,8 @@ Ver `PracticoN5ServicioApiRest/appsettings.example.json`.
 
 | Suite | Cantidad | Qué cubre |
 |---|---:|---|
-| `PracticoN5ServicioApiRest.Tests` | 160 | Autenticación, **matriz de acceso por rol**, catálogo (búsqueda, filtros, orden, paginación), stock y movimientos, compras/ventas/anulaciones, checkout (precios del servidor, pago aprobado/rechazado, rollback, última unidad), reportes y correo, auditoría, registro de errores, gestión de usuarios. Corren la API completa en memoria con SQLite. |
-| `PracticoN6.Frontend.Shared.Tests` | 63 | Cliente HTTP (token, mensajes de error, sesión vencida, sin conexión), sesión y restauración, carrito por usuario, formato de importes y fechas, configuración del servidor. |
+| `PracticoN5ServicioApiRest.Tests` | 167 | Autenticación, **matriz de acceso por rol**, catálogo (búsqueda, filtros, orden, paginación), stock y movimientos, compras/ventas/anulaciones, checkout (precios del servidor, pago aprobado/rechazado, rollback, última unidad), reportes y correo, auditoría, registro de errores, límites de frecuencia, revalidación del token, gestión de usuarios. Corren la API completa en memoria con SQLite. |
+| `PracticoN6.Frontend.Shared.Tests` | 67 | Cliente HTTP (token, mensajes de error, sesión vencida, sin conexión), sesión y restauración, carrito por usuario, formato de importes y fechas, configuración del servidor. |
 | `e2e/` (Playwright) | 2 recorridos | La **interfaz real** en un navegador con tamaño de teléfono, contra la API real: login, catálogo, carrito, pago rechazado y aprobado, comprobante PDF, y todo el flujo del personal (productos con imagen, stock, compras, movimientos, reportes, usuarios, auditoría, restricciones por rol). |
 
 ```bash
@@ -318,7 +325,15 @@ dotnet test PracticoN6.Frontend.Shared.Tests
 cd e2e && npm install && npx playwright install chromium && npm run cliente && npm run personal
 ```
 
-Las pruebas encontraron y se corrigieron varios defectos reales durante el desarrollo; los más relevantes: una operación revertida dejaba entidades pendientes que luego guardaba la auditoría (compras/ventas "fantasma"), las listas paginadas del TP 5 no tenían orden determinista, y un botón que exigía dos toques en pantallas táctiles por enlazarse al evento equivocado (lo detectó el recorrido en el navegador).
+Las pruebas y una revisión de código independiente encontraron y permitieron corregir defectos reales durante el desarrollo; los más relevantes:
+
+- una operación revertida dejaba entidades pendientes que luego guardaba la auditoría (compras/ventas "fantasma");
+- el registro público podía enlazarse con un cliente existente por correo (acceso a datos ajenos);
+- un token seguía valiendo tras desactivar al usuario o cambiarle el rol;
+- las listas paginadas del TP 5 no tenían orden determinista;
+- un ajuste de stock con una observación larga cambiaba el stock pero no dejaba el movimiento;
+- el carrito podía duplicar ítems al cargarse dos veces a la vez, y la pantalla *Servidor* fallaba siempre al probar la conexión;
+- un botón que exigía dos toques en pantallas táctiles por enlazarse al evento equivocado.
 
 ### Qué **no** se pudo verificar (a tener en cuenta)
 
@@ -343,7 +358,7 @@ El TP se desarrolla en **grupos de 2 alumnos** con **repositorio Git**.
 
 ## Limitaciones y mejoras posibles
 
-- Pago **simulado**: no hay integración con una pasarela real.
+- Pago **simulado**: no hay integración con una pasarela real, y al anular una venta el pago original se conserva como registro histórico (no se registra un reembolso).
 - Sin recuperación de contraseña ni cambio de contraseña propio (el administrador puede restablecerla editando el usuario).
 - El token no se renueva: al vencer (`Jwt:ExpirationMinutes`) la app pide iniciar sesión de nuevo.
 - La imagen de cada producto se sirve sin redimensionar; para un catálogo grande convendría generar miniaturas.

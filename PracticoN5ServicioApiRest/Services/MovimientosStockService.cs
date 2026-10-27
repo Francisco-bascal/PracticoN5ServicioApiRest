@@ -24,6 +24,8 @@ namespace PracticoN5ServicioApiRest.Services
     /// <summary>Único punto por el que cambia el stock de un producto: actualiza la cantidad y deja el movimiento registrado.</summary>
     public class MovimientosStockService
     {
+        private const int LongitudMaximaObservacion = 200;
+
         private readonly SistemaVentasDbContext _contexto;
         private readonly UsuarioActual _usuarioActual;
         private readonly ZonaHorariaNegocio _zonaHoraria;
@@ -56,6 +58,12 @@ namespace PracticoN5ServicioApiRest.Services
             if (delta == 0)
             {
                 return;
+            }
+
+            // Se valida antes de modificar el stock: si fallara al guardar el movimiento, el stock ya habría cambiado.
+            if (observacion != null && observacion.Length > LongitudMaximaObservacion)
+            {
+                throw new ArgumentException($"La observación no puede superar los {LongitudMaximaObservacion} caracteres.", nameof(observacion));
             }
 
             int filas = await _contexto.Productos

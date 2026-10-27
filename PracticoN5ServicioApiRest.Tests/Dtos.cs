@@ -16,6 +16,16 @@ namespace PracticoN5ServicioApiRest.Tests
     /// <summary>Operaciones de la API que se repiten en muchos tests.</summary>
     public static class Api
     {
+        /// <summary>Inicia sesión y deja el token en el cliente.</summary>
+        public static async Task IniciarSesionAsync(this HttpClient http, string usuario, string password)
+        {
+            var respuesta = await http.PostAsJsonAsync("/api/Usuarios/login", new { nombreUsuario = usuario, password });
+            respuesta.EnsureSuccessStatusCode();
+
+            var login = await respuesta.Content.ReadFromJsonAsync<LoginDto>();
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", login!.Token);
+        }
+
         public static async Task<T> LeerAsync<T>(this HttpResponseMessage respuesta)
         {
             Assert.True(respuesta.IsSuccessStatusCode, $"Se esperaba éxito pero fue {(int)respuesta.StatusCode}: {await respuesta.Content.ReadAsStringAsync()}");
