@@ -1,0 +1,54 @@
+@page "/pedidos"
+@attribute [Authorize]
+@inject TiendaApi Tienda
+
+<div class="pagina">
+    <h1>Mis pedidos</h1>
+
+    @if (_error != null)
+    {
+        <Alerta Tipo="error">@_error</Alerta>
+    }
+    else if (_pedidos == null)
+    {
+        <Cargando />
+    }
+    else if (_pedidos.Count == 0)
+    {
+        <div class="vacio">
+            <div class="vacio-icono">📦</div>
+            <p>Todavía no realizó ninguna compra.</p>
+            <a class="btn btn-primario" href="">Ver el catálogo</a>
+        </div>
+    }
+    else
+    {
+        @foreach (var pedido in _pedidos)
+        {
+            <a class="fila @(pedido.Anulada ? "fila-anulada" : "")" href="pedidos/@pedido.VentaId">
+                <div class="fila-cuerpo">
+                    <div class="fila-titulo">Pedido N° @pedido.VentaId @if (pedido.Anulada){<span class="etiqueta etiqueta-peligro">Anulado</span>}</div>
+                    <div class="fila-detalle">@Formato.FechaHora(pedido.Fecha) · @pedido.Items.Sum(i => i.Cantidad) @(pedido.Items.Sum(i => i.Cantidad) == 1 ? "unidad" : "unidades")</div>
+                </div>
+                <div class="fila-derecha fila-titulo">@Formato.Dinero(pedido.Total)</div>
+            </a>
+        }
+    }
+</div>
+
+@code {
+    private List<Pedido>? _pedidos;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _pedidos = await Tienda.ObtenerMisPedidosAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

@@ -1,0 +1,38 @@
+@implements IDisposable
+@inject CarritoService Carrito
+@inject NavigationManager Navegacion
+
+<article class="tarjeta-producto">
+    <a href="producto/@Producto.ProductoId" class="tarjeta-enlace" aria-label="Ver @Producto.Nombre">
+        <ImagenProducto Producto="Producto" />
+        <div class="tarjeta-cuerpo">
+            <h3 class="tarjeta-titulo">@Producto.Nombre</h3>
+            <p class="precio">@Formato.Dinero(Producto.Precio)</p>
+            <InsigniaStock Stock="Producto.Stock" />
+        </div>
+    </a>
+    <button class="btn btn-primario btn-bloque"
+            disabled="@(!Producto.Disponible || EnCarrito >= Producto.Stock)"
+            @onclick="Agregar">
+        @(Producto.Disponible ? (EnCarrito >= Producto.Stock ? "Máximo en el carrito" : "Agregar al carrito") : "No disponible")
+    </button>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public Producto Producto { get; set; } = default!;
+    [Parameter] public EventCallback<string> Agregado { get; set; }
+
+    private int EnCarrito => Carrito.CantidadDe(Producto.ProductoId);
+
+    protected override void OnInitialized() => Carrito.Cambio += AlCambiarCarrito;
+
+    private void AlCambiarCarrito() => InvokeAsync(StateHasChanged);
+
+    private async Task Agregar()
+    {
+        int agregadas = await Carrito.AgregarAsync(Producto);
+        await Agregado.InvokeAsync(agregadas > 0 ? $"«{Producto.Nombre}» se agregó al carrito." : "Ya tiene todo el stock disponible en el carrito.");
+    }
+
+    public void Dispose() => Carrito.Cambio -= AlCambiarCarrito;
+}

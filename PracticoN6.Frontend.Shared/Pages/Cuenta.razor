@@ -1,0 +1,110 @@
+@page "/cuenta"
+@attribute [Authorize]
+@inject TiendaApi Tienda
+@inject SesionService Sesion
+@inject CarritoService Carrito
+@inject NotificacionesService Notificaciones
+@inject NavigationManager Navegacion
+
+<div class="pagina">
+    <h1>Mi cuenta</h1>
+
+    @if (_error != null)
+    {
+        <Alerta Tipo="error">@_error</Alerta>
+    }
+
+    @if (_perfil == null && _error == null)
+    {
+        <Cargando />
+    }
+    else if (_perfil != null)
+    {
+        <div class="tarjeta">
+            <div class="fila-titulo">@_perfil.NombreUsuario <span class="etiqueta">@_perfil.Rol</span></div>
+            <div class="fila-detalle">@_perfil.Email</div>
+        </div>
+
+        <h2>Mis datos</h2>
+        <EditForm Model="_formulario" OnValidSubmit="Guardar">
+            <DataAnnotationsValidator />
+            <div class="fila-campos">
+                <div class="campo">
+                    <label for="nombre">Nombre</label>
+                    <InputText id="nombre" @bind-Value="_formulario.Nombre" />
+                    <ValidationMessage For="() => _formulario.Nombre" />
+                </div>
+                <div class="campo">
+                    <label for="apellido">Apellido</label>
+                    <InputText id="apellido" @bind-Value="_formulario.Apellido" />
+                </div>
+            </div>
+            <div class="campo">
+                <label for="telefono">Teléfono</label>
+                <InputText id="telefono" type="tel" @bind-Value="_formulario.Telefono" />
+            </div>
+            <div class="campo">
+                <label for="direccion">Dirección</label>
+                <InputText id="direccion" @bind-Value="_formulario.Direccion" />
+            </div>
+            <button class="btn btn-primario btn-bloque" type="submit" disabled="@_guardando">@(_guardando ? "Guardando..." : "Guardar cambios")</button>
+        </EditForm>
+    }
+
+    <h2>Sesión</h2>
+    <div class="acciones">
+        <a class="btn btn-secundario" href="servidor">⚙️ Servidor</a>
+        <button class="btn btn-peligro" @onclick="CerrarSesion">Cerrar sesión</button>
+    </div>
+</div>
+
+@code {
+    private Perfil? _perfil;
+    private FormularioPerfil _formulario = new();
+    private string? _error;
+    private bool _guardando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _perfil = await Tienda.ObtenerPerfilAsync();
+            _formulario = new FormularioPerfil
+            {
+                Nombre = _perfil.Nombre ?? _perfil.NombreUsuario,
+                Apellido = _perfil.Apellido,
+                Telefono = _perfil.Telefono,
+                Direccion = _perfil.Direccion
+            };
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task Guardar()
+    {
+        _guardando = true;
+
+        try
+        {
+            _perfil = await Tienda.ActualizarPerfilAsync(_formulario);
+            Notificaciones.Exito("Datos actualizados.");
+        }
+        catch (ApiException ex)
+        {
+            Notificaciones.Error(ex.Message);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private async Task CerrarSesion()
+    {
+        await Sesion.CerrarSesionAsync();
+        Navegacion.NavigateTo("login", replace: true);
+    }
+}

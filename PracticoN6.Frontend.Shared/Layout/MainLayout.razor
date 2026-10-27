@@ -1,0 +1,107 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject SesionService Sesion
+@inject CarritoService Carrito
+@inject NavigationManager Navegacion
+@inject IJSRuntime JS
+
+<div class="app">
+    <header class="appbar">
+        @if (MostrarVolver)
+        {
+            <button class="appbar-btn" aria-label="Volver" @onclick="Volver">‹</button>
+        }
+        <a class="appbar-titulo" href="">🛍️ Tienda Móvil</a>
+        <AuthorizeView>
+            <Authorized>
+                <span class="appbar-usuario">@context.User.Identity?.Name · @Sesion.Rol</span>
+            </Authorized>
+        </AuthorizeView>
+    </header>
+
+    <main class="contenido">
+        <BoundaryConRegistro @ref="_boundary">
+            <ChildContent>@Body</ChildContent>
+            <ErrorContent Context="excepcion">
+                <div class="pagina">
+                    <h1>Algo salió mal</h1>
+                    <Alerta Tipo="error">Ocurrió un error inesperado. Ya quedó registrado para que podamos revisarlo.</Alerta>
+                    <a class="btn btn-primario" href="" @onclick="_boundary!.Recover">Volver al inicio</a>
+                </div>
+            </ErrorContent>
+        </BoundaryConRegistro>
+    </main>
+
+    <Notificaciones />
+
+    <AuthorizeView>
+        <Authorized>
+            <nav class="tabbar" aria-label="Navegación principal">
+                <NavLink class="tab" href="" Match="NavLinkMatch.All">
+                    <span class="tab-icono">🏬</span><span>Catálogo</span>
+                </NavLink>
+                <NavLink class="tab" href="carrito">
+                    <span class="tab-icono">🛒@if (Carrito.Unidades > 0){<span class="tab-badge">@Carrito.Unidades</span>}</span><span>Carrito</span>
+                </NavLink>
+                <NavLink class="tab" href="pedidos">
+                    <span class="tab-icono">📦</span><span>Pedidos</span>
+                </NavLink>
+                @if (Sesion.EsPersonal)
+                {
+                    <NavLink class="tab" href="admin">
+                        <span class="tab-icono">⚙️</span><span>Panel</span>
+                    </NavLink>
+                }
+                <NavLink class="tab" href="cuenta">
+                    <span class="tab-icono">👤</span><span>Cuenta</span>
+                </NavLink>
+            </nav>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+@code {
+    // Pantallas raíz de la barra inferior: no muestran el botón "volver".
+    private static readonly string[] Raices = { "", "carrito", "pedidos", "cuenta", "admin", "login" };
+
+    private BoundaryConRegistro? _boundary;
+
+    private bool MostrarVolver => !Raices.Contains(Navegacion.ToBaseRelativePath(Navegacion.Uri).Split('?')[0].TrimEnd('/'));
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navegacion.LocationChanged += AlNavegar;
+        Carrito.Cambio += AlCambiarEstado;
+        Sesion.SesionCambio += AlCambiarEstado;
+
+        // Primero se restaura la sesión guardada y luego se carga el carrito de ese usuario.
+        await Sesion.AsegurarRestauradaAsync();
+        await Carrito.CargarAsync();
+    }
+
+    private void AlNavegar(object? sender, LocationChangedEventArgs e)
+    {
+        // Al cambiar de pantalla se descarta el error de la anterior.
+        _boundary?.Recover();
+        StateHasChanged();
+    }
+
+    private void AlCambiarEstado() => InvokeAsync(StateHasChanged);
+
+    private async Task Volver()
+    {
+        bool pudo = await JS.InvokeAsync<bool>("tiendaVolver");
+
+        if (!pudo)
+        {
+            Navegacion.NavigateTo("");
+        }
+    }
+
+    public void Dispose()
+    {
+        Navegacion.LocationChanged -= AlNavegar;
+        Carrito.Cambio -= AlCambiarEstado;
+        Sesion.SesionCambio -= AlCambiarEstado;
+    }
+}

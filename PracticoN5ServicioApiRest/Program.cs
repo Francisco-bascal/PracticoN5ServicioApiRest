@@ -57,7 +57,20 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new Exception("Database connection not found");
-builder.Services.AddDbContext<SistemaVentasDbContext>(options => options.UseSqlServer(connectionString));
+// SQL Server es el proveedor real. "Sqlite" (Database:Proveedor) es solo para probar la app sin instalar SQL Server:
+// usa un archivo local y crea las tablas directamente (Database:CrearEsquema), sin pasar por las migraciones.
+bool usarSqlite = string.Equals(builder.Configuration["Database:Proveedor"], "Sqlite", StringComparison.OrdinalIgnoreCase);
+builder.Services.AddDbContext<SistemaVentasDbContext>(options =>
+{
+    if (usarSqlite)
+    {
+        options.UseSqlite(connectionString);
+    }
+    else
+    {
+        options.UseSqlServer(connectionString);
+    }
+});
 
 // Permite a los servicios conocer al usuario autenticado de la petición actual (UsuarioActual).
 builder.Services.AddHttpContextAccessor();
@@ -192,6 +205,13 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+// Impide que el navegador "adivine" el tipo de un archivo servido (por ejemplo, tratar como HTML una imagen subida).
+app.Use(async (contexto, siguiente) =>
+{
+    contexto.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    await siguiente();
+});
 
 // Aplica la política de CORS a todo el pipeline. Va antes de la autenticación para que las respuestas
 // de CORS lleguen aunque la petición luego sea rechazada por auth.

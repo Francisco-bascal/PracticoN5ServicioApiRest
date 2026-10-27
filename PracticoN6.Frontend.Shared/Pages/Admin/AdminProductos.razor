@@ -1,0 +1,81 @@
+@page "/admin/productos"
+@attribute [Authorize(Roles = Roles.Personal)]
+@inject TiendaApi Tienda
+
+<div class="pagina">
+    <h1>Productos</h1>
+
+    <form class="buscador" @onsubmit="Buscar" @onsubmit:preventDefault>
+        <input type="search" placeholder="Buscar por nombre o descripción" aria-label="Buscar productos" @bind="_busqueda" enterkeyhint="search" />
+        <button class="btn btn-primario" type="submit" aria-label="Buscar">🔍</button>
+    </form>
+
+    <a class="btn btn-acento btn-bloque" href="admin/productos/nuevo">＋ Nuevo producto</a>
+
+    @if (_error != null)
+    {
+        <Alerta Tipo="error">@_error</Alerta>
+    }
+    else if (_pagina == null)
+    {
+        <Cargando />
+    }
+    else if (_pagina.Elementos.Count == 0)
+    {
+        <div class="vacio"><div class="vacio-icono">📦</div><p>No hay productos.</p></div>
+    }
+    else
+    {
+        <p class="pequeno suave" style="margin-top:12px">@_pagina.TotalElementos @(_pagina.TotalElementos == 1 ? "producto" : "productos")</p>
+
+        @foreach (var producto in _pagina.Elementos)
+        {
+            <a class="fila" href="admin/productos/@producto.ProductoId">
+                <ImagenProducto Producto="producto" Clase="miniatura" />
+                <div class="fila-cuerpo">
+                    <div class="fila-titulo">@producto.Nombre</div>
+                    <div class="fila-detalle">@producto.Categoria · @Formato.Dinero(producto.Precio)</div>
+                </div>
+                <div class="fila-derecha"><InsigniaStock Stock="producto.Stock" /></div>
+            </a>
+        }
+
+        <Paginador Pagina="_numero" TotalPaginas="_pagina.TotalPaginas" PaginaCambiada="IrAPagina" />
+    }
+</div>
+
+@code {
+    private Pagina<Producto>? _pagina;
+    private string _busqueda = string.Empty;
+    private string _busquedaAplicada = string.Empty;
+    private int _numero = 1;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Cargar();
+
+    private Task Buscar()
+    {
+        _busquedaAplicada = _busqueda;
+        return IrAPagina(1);
+    }
+
+    private Task IrAPagina(int numero)
+    {
+        _numero = numero;
+        return Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        _error = null;
+
+        try
+        {
+            _pagina = await Tienda.BuscarProductosAsync(_busquedaAplicada, null, false, "nombre", _numero, 15);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

@@ -1,0 +1,42 @@
+@inject TiendaApi Tienda
+
+@if (_url != null && !_fallo)
+{
+    <img class="@Clase" src="@_url" alt="@Producto.Nombre" loading="lazy" @onerror="Fallo" />
+}
+else
+{
+    <div class="@Clase imagen-vacia" role="img" aria-label="@Producto.Nombre (sin imagen)">@Emoji</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Producto Producto { get; set; } = default!;
+    [Parameter] public string Clase { get; set; } = "producto-img";
+
+    private string? _url;
+    private bool _fallo;
+    private string? _claveCargada;
+
+    private string Emoji => Producto.Categoria switch
+    {
+        "Electrónica" => "🎧",
+        "Hogar" => "🏠",
+        "Deportes" => "⚽",
+        "Libros" => "📚",
+        _ => "📦"
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        string clave = $"{Producto.ProductoId}:{Producto.ImagenRuta}";
+
+        if (clave != _claveCargada)
+        {
+            _claveCargada = clave;
+            _fallo = false;
+            _url = await Tienda.UrlImagenAsync(Producto);
+        }
+    }
+
+    private void Fallo() => _fallo = true;
+}

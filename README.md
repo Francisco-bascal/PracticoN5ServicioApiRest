@@ -1,389 +1,354 @@
-# PracticoN5ServicioApiRest
+# Tienda Móvil — TP 6 (Programación Móvil)
 
-API REST para la gestión de un sistema de ventas y compras creada con ASP.NET Core. Permite administrar categorías, productos, clientes, proveedores y usuarios, así como registrar y anular compras y ventas con control automático de stock. El acceso a los recursos está protegido mediante autenticación con tokens JWT y cuenta con documentación interactiva vía Swagger.
+Sistema de ventas y control de stock con **backend ASP.NET Core Web API** (TP 5) y un **frontend móvil en Blazor Hybrid (.NET MAUI)** para Android: catálogo de productos, carrito de compras, pago simulado, registro de entradas de mercadería, reportes en PDF, control de acceso por roles y registro de auditoría y de errores.
+
+> Este repositorio parte del TP 5 ([`PracticoN5ServicioApiRest`](https://github.com/Francisco-bascal/PracticoN5ServicioApiRest)) y lo extiende para cumplir las consignas del TP 6.
 
 ---
 
 ## Índice
 
-1. [Stack tecnológico](#stack-tecnológico)
-2. [Estructura del proyecto](#estructura-del-proyecto)
-3. [Arquitectura](#arquitectura)
-4. [Modelo de datos](#modelo-de-datos)
-5. [Autenticación JWT](#autenticación-jwt)
-6. [Endpoints de la API](#endpoints-de-la-api)
-7. [Flujos de negocio clave](#flujos-de-negocio-clave)
-8. [Paginación](#paginación)
-9. [Manejo de errores](#manejo-de-errores)
-10. [Configuración](#configuración)
-11. [Cómo ejecutar el proyecto](#cómo-ejecutar-el-proyecto)
-12. [Convenciones y deuda técnica conocida](#convenciones-y-deuda-técnica-conocida)
+1. [Cumplimiento de las consignas](#cumplimiento-de-las-consignas)
+2. [Arquitectura](#arquitectura)
+3. [Estructura del repositorio](#estructura-del-repositorio)
+4. [Cómo ejecutarlo](#cómo-ejecutarlo)
+5. [Usuarios de ejemplo](#usuarios-de-ejemplo)
+6. [Roles y permisos](#roles-y-permisos)
+7. [Modelo de datos y normalización](#modelo-de-datos-y-normalización)
+8. [Endpoints de la API](#endpoints-de-la-api)
+9. [Flujos de negocio](#flujos-de-negocio)
+10. [Auditoría y registro de errores](#auditoría-y-registro-de-errores)
+11. [Configuración](#configuración)
+12. [Pruebas y qué se verificó](#pruebas-y-qué-se-verificó)
+13. [Trabajo en equipo y Git](#trabajo-en-equipo-y-git)
+14. [Limitaciones y mejoras posibles](#limitaciones-y-mejoras-posibles)
 
 ---
 
-## Stack tecnológico
+## Cumplimiento de las consignas
 
-| Tecnología | Versión | Uso |
+| Consigna del TP 6 | Cómo se cumple | Dónde |
 |---|---|---|
-| .NET (ASP.NET Core) | 8.0 | Plataforma del Web API |
-| Entity Framework Core | 8.0.30 | ORM y acceso a datos (SQL Server) |
-| SQL Server | — | Base de datos relacional |
-| Microsoft.AspNetCore.Authentication.JwtBearer | 8.0.30 | Autenticación y validación de tokens JWT |
-| Swashbuckle.AspNetCore | 6.6.2 | Documentación interactiva de la API (Swagger/OpenAPI) |
-
----
-
-## Estructura del proyecto
-
-```
-PracticoN5ServicioApiRest/
-├── Controllers/          # Capa de presentación: expone los endpoints HTTP
-├── Services/             # Capa de aplicación: lógica de negocio
-├── Models/               # Entidades del dominio (objetos EF Core)
-├── DTOs/                 # Objetos de transferencia de datos (entrada/salida)
-├── Data/                 # DbContext y configuración de EF Core
-├── Migrations/           # Migraciones de base de datos EF Core
-├── Program.cs            # Punto de entrada: DI, autenticación, Swagger, pipeline
-└── wwwroot/Uploads/      # Carpeta para archivos subidos (imágenes de productos)
-```
+| Frontend con **Blazor Hybrid** vinculado al backend del TP 5, probado en **Android** | App .NET MAUI con `BlazorWebView` que consume la API REST por HTTP/JWT. Objetivo de compilación: `net8.0-android`. | `PracticoN6.Frontend.Maui`, `PracticoN6.Frontend.Shared` |
+| **Catálogo de productos** (tipo mercado libre) y **carrito de compras** | Grilla de productos con imagen, búsqueda, filtro por categoría, orden por nombre/precio, "solo con stock" y paginación; detalle de producto; carrito persistente por usuario. | `Pages/Catalogo.razor`, `ProductoDetalle.razor`, `CarritoPagina.razor` |
+| Registrar **ventas** y **entradas de mercadería**, con **control de stock** actualizado | Las ventas se registran desde el carrito (checkout) o como venta de mostrador; las entradas, como compras a proveedores. Cada cambio de stock queda en un **libro de movimientos** y se aplica con un `UPDATE` condicional en la base, pensado para que dos operaciones simultáneas no puedan dejar el stock negativo (las pruebas cubren la última unidad de forma secuencial; no hay una prueba de concurrencia real). | `MovimientosStockService`, `VentasService`, `ComprasService` |
+| Ver el catálogo con **disponibilidad y stock** | Cada producto muestra "Stock: N", "¡Últimas N unidades!" o "Sin stock" (botón deshabilitado). | `InsigniaStock.razor`, `TarjetaProducto.razor` |
+| **Compra y pago simulado** | Checkout con medio de pago (crédito, débito, transferencia) y pasarela simulada: aprueba con código de autorización o rechaza (HTTP 402). Stock, venta y pago se confirman **en una sola transacción**. | `Checkout.razor`, `PasarelaPagoSimulada`, `VentasService.CheckoutAsync` |
+| **Reportes en PDF** para consulta y **envío por correo** (stock, entradas, salidas…) | Reportes de stock, entradas, salidas, movimientos y comprobante de venta. Se ven/guardan/comparten desde el teléfono o se envían por correo (SMTP). | `ReportesController`, `ReportesPdfService`, `EmailService`, `AdminReportes.razor` |
+| **Control de acceso y gestión de roles** | JWT con roles `Administrador`, `Operador` y `Cliente` (tabla propia); pantallas y endpoints restringidos por rol; el administrador asigna roles, activa/desactiva y elimina usuarios. | [Roles y permisos](#roles-y-permisos), `AdminUsuarios.razor` |
+| **Auditoría y registro (log) de errores** | Toda acción que modifica datos, cada login (exitoso o fallido) y cada reporte generado quedan auditados (quién, qué, cuándo, resultado). Los errores no controlados del servidor y de la app se guardan con su detalle técnico. | [Auditoría y registro de errores](#auditoría-y-registro-de-errores) |
+| Trabajo en **grupos de 2** y repositorio **Git** | Ver [Trabajo en equipo y Git](#trabajo-en-equipo-y-git). | — |
+| **Normalización** de la base de datos (al menos 3FN) | Modelo en 3FN con análisis y decisiones explícitas (incluida la única desnormalización deliberada). | [Modelo de datos y normalización](#modelo-de-datos-y-normalización) |
 
 ---
 
 ## Arquitectura
 
-El proyecto sigue una arquitectura en capas con separación clara de responsabilidades:
-
+```mermaid
+flowchart LR
+    subgraph Dispositivo["Teléfono Android"]
+        MAUI["PracticoN6.Frontend.Maui<br/>(.NET MAUI · BlazorWebView)"]
+        SHARED["PracticoN6.Frontend.Shared<br/>Razor Class Library:<br/>pantallas, servicios, carrito, sesión"]
+        MAUI --> SHARED
+    end
+    WEB["PracticoN6.Frontend.Web<br/>(Blazor WebAssembly — host de pruebas)"] --> SHARED
+    SHARED -- "HTTP + JWT" --> API
+    subgraph Servidor
+        API["PracticoN5ServicioApiRest<br/>ASP.NET Core 8 Web API"]
+        DB[("SQL Server<br/>(EF Core)")]
+        API --> DB
+        API -- "SMTP" --> MAIL["Servidor de correo"]
+    end
 ```
-Controller → Service → DbContext (EF Core) → SQL Server
-```
 
-- **Controllers**: finos, resuelven cuestiones HTTP (rutas, verbos, códigos de estado) y delegan toda la lógica al servicio correspondiente.
-- **Services**: concentran la lógica de negocio, las validaciones, las transacciones y el acceso a datos mediante el `DbContext`.
-- **Models**: entidades EF Core que se persisten en la base de datos.
-- **DTOs**: contratos de entrada/salida (usados en Productos, Compras, Ventas y Login).
-
-### Convenciones de la capa de servicios
-
-- Todos los servicios son clases concretas registradas como **scoped** en `Program.cs` e inyectadas por constructor (`_contexto`).
-- Toda operación de base de datos es **asíncrona** (`async/await`) y propaga `CancellationToken`.
-- Las lecturas usan `AsNoTracking()`, con las excepciones del flujo de login (necesita la entidad rastreada para verificar el hash) y de las operaciones de escritura.
-- Las operaciones que afectan stock se ejecutan **dentro de transacciones SQL** con rollback ante cualquier error (`ComprasService` y `VentasService`).
-- Las validaciones lanzan excepciones (véase [Manejo de errores](#manejo-de-errores)) que los controllers convierten en códigos HTTP.
+- **Backend**: `Controller → Service → DbContext (EF Core) → SQL Server`. Los servicios concentran la lógica y las transacciones; los controllers solo resuelven HTTP y roles.
+- **Frontend**: toda la interfaz y la lógica viven en una **Razor Class Library compartida**. La app MAUI es un *host* mínimo que aporta lo propio del dispositivo (almacenamiento cifrado del token, hoja de compartir de Android, permisos). El mismo código corre en el navegador (`PracticoN6.Frontend.Web`) para desarrollar y probar sin emulador.
+- Lo que depende de la plataforma se aísla en tres interfaces (`IAlmacenamientoSeguro`, `IPreferencias`, `IGestorArchivos`) que cada host implementa.
 
 ---
 
-## Modelo de datos
-
-Nueve entidades en `Models/`. Todas usan claves primarias `int` con `[Key]`. El `DbContext` (`SistemaVentasDbContext`) define todas las relaciones con `DeleteBehavior.Restrict`.
-
-### Entidades maestras
-
-| Entidad | Propiedades clave | Validaciones |
-|---|---|---|
-| `CategoriaProducto` | `CategoriaId`, `Nombre`, `Descripcion` | `Nombre` requerido, longitud 3-50; `Descripcion` máx. 500 |
-| `Producto` | `ProductoId`, `Nombre`, `Descripcion`, `Precio`, `Stock`, `ImagenRuta`, `CategoriaId` | `Nombre` requerido 2-100; `Precio`/`Stock` no negativos; `Precio` precisión (18,2) |
-| `Cliente` | `ClienteId`, `Nombre`, `Apellido`, `Telefono`, `Email`, `Direccion` | `Nombre` requerido 2-100; `Email` con formato válido |
-| `Proveedor` | `ProveedorId`, `Nombre`, `Telefono`, `Email`, `Direccion` | `Nombre` requerido 2-100; `Email` con formato válido |
-| `Usuario` | `UsuarioId`, `NombreUsuario`, `Email`, `PasswordHash`, `Rol` | `NombreUsuario` 4-50; `PasswordHash` y `Rol` requeridos |
-
-### Compras y ventas
-
-| Entidad | Propiedades clave | Relaciones |
-|---|---|---|
-| `Compra` | `CompraId`, `Fecha`, `ProveedorId` | N:1 con `Proveedor`; 1:N con `DetalleCompra` |
-| `DetalleCompra` | `DetalleCompraId`, `Cantidad`, `PrecioUnitario`, `CompraId`, `ProductoId` | N:1 con `Compra` y `Producto` |
-| `Venta` | `VentaId`, `Fecha`, `ClienteId` | N:1 con `Cliente`; 1:N con `DetalleVenta` |
-| `DetalleVenta` | `DetalleVentaId`, `Cantidad`, `PrecioUnitario`, `VentaId`, `ProductoId` | N:1 con `Venta` y `Producto` |
-
-### Relaciones (1:N)
+## Estructura del repositorio
 
 ```
-CategoriaProducto 1──N Producto
-Proveedor         1──N Compra 1──N DetalleCompra N──1 Producto
-Cliente           1──N Venta  1──N DetalleVenta  N──1 Producto
+PracticoN5ServicioApiRest.sln
+├── PracticoN5ServicioApiRest/          API REST (TP 5 extendida)
+│   ├── Controllers/                    endpoints HTTP
+│   ├── Services/                       lógica de negocio, PDF, correo, stock, auditoría
+│   ├── Models/  DTOs/  Data/           entidades, contratos, DbContext e inicializador
+│   ├── Infraestructura/                filtro de auditoría y middleware de errores
+│   ├── Migrations/                     migraciones EF Core (la nueva: Tp6BlazorHybrid)
+│   └── appsettings.example.json        plantilla de configuración
+├── PracticoN5ServicioApiRest.Tests/    160 pruebas de integración de la API
+├── PracticoN6.Frontend.Shared/         UI y lógica del frontend (Razor Class Library)
+├── PracticoN6.Frontend.Shared.Tests/   63 pruebas unitarias del frontend
+├── PracticoN6.Frontend.Maui/           app Android (.NET MAUI + Blazor Hybrid)
+├── PracticoN6.Frontend.Web/            host web (Blazor WebAssembly) para desarrollo y pruebas
+└── e2e/                                recorridos automáticos de la interfaz (Playwright)
 ```
-
-- Categoría → Productos, Proveedor → Compras y Cliente → Ventas son relaciones 1:N.
-- `DetalleCompra` y `DetalleVenta` son las líneas de cada documento; apuntan a `Producto` y al documento padre definiendo la relación N:1.
-- Todos los FKs usan `DeleteBehavior.Restrict`; por eso los servicios validan manualmente antes de eliminar (por ejemplo, no se elimina una categoría con productos o un producto con historial en detalles).
 
 ---
 
-## Autenticación JWT
+## Cómo ejecutarlo
 
-La API usa tokens JWT Bearer. La configuración se encuentra en `Program.cs` y la emisión de tokens en `UsuariosService`.
+### Requisitos
 
-### Configuración (`appsettings.*.json`)
+- **.NET 8 SDK** y **Visual Studio 2022 (17.8 o superior)** con las cargas de trabajo *ASP.NET y desarrollo web* y *Desarrollo de la interfaz de usuario de aplicaciones multiplataforma con .NET (MAUI)*, que incluye el SDK y el emulador de Android.
+- **SQL Server** (por ejemplo LocalDB, que viene con Visual Studio). Opcional: hay un modo de demostración con SQLite.
 
-| Clave | Descripción |
-|---|---|
-| `Jwt:Key` | Clave simétrica de firma (usada para firmar y validar). **No debe exponerse.** |
-| `Jwt:Issuer` | Emisor válido del token. |
-| `Jwt:Audience` | Se lee en `Program.cs`, pero no está definida en los appsettings; su validación está deshabilitada (`ValidateAudience = false`). |
+### 1. La API
 
-Parámetros de validación: emisor validado, firma validada, vida útil validada, audiencia no validada (por no usar frontend).
+```bash
+cd PracticoN5ServicioApiRest
+cp appsettings.example.json appsettings.Development.json    # en Windows: copy
+# editar ConnectionStrings:DefaultConnection y Jwt:Key
+dotnet run --launch-profile http
+```
 
-### Flujo de login
+Al arrancar, la API aplica las migraciones pendientes, crea el **administrador inicial** y, si `Seed:DatosDemo` es `true`, carga un catálogo y usuarios de ejemplo. Swagger queda en `http://localhost:5276/swagger`.
 
-1. `POST api/Usuarios/login` recibe `LoginRequestDTO` (`NombreUsuario`, `Password`).
-2. `UsuariosService.LoginAsync` busca el usuario por nombre (insensible a mayúsculas). Si no existe → `null` → `401`.
-3. La contraseña se verifica con `PasswordHasher<Usuario>.VerifyHashedPassword`. Si falla → `null` → `401`.
-4. Si es válida, genera un token firmado con `HmacSha256`, expiración de **1 hora** (`DateTime.UtcNow.AddHours(1)`) y los claims:
-   - `NameIdentifier` → `UsuarioId`
-   - `Name` → `NombreUsuario`
-   - `Role` → `Rol`
-5. Devuelve `LoginResponseDTO` con el `Token`.
+> `appsettings.*.json` está en el `.gitignore` (contiene secretos): por eso se versiona solo la plantilla `appsettings.example.json`.
 
-### Respuestas de autorización personalizadas
+Migraciones a mano: el repositorio incluye `dotnet-tools.json` con `dotnet-ef` 10; con el SDK 8 instale la herramienta compatible (`dotnet tool install --global dotnet-ef --version 8.0.30`) y use `dotnet-ef database update`.
 
-- **401** (`OnChallenge`): `{ "mensaje": "Debe iniciar sesión para acceder a este recurso." }`.
-- **403** (`OnForbidden`): `{ "mensaje": "No tiene permisos para acceder a este recurso." }`.
+**Modo demostración sin SQL Server (SQLite)** — útil para probar la app rápidamente:
 
-### Cómo probar desde Swagger
+```powershell
+# PowerShell (Windows)
+$env:Database__Proveedor = "Sqlite"; $env:Database__CrearEsquema = "true"
+$env:ConnectionStrings__DefaultConnection = "Data Source=tienda.db"
+$env:Jwt__Key = "una-clave-de-desarrollo-de-mas-de-32-caracteres"; $env:Jwt__Issuer = "MiWebApi"
+$env:Seed__AdminPassword = "Admin1234"; $env:Seed__DatosDemo = "true"
+dotnet run --launch-profile http
+```
 
-1. `POST api/Usuarios/login` con un usuario existente.
-2. Copiar el `token` de la respuesta.
-3. Pulsar **Authorize** en Swagger e ingresar `Bearer <token>`.
+En bash, anteponga las mismas variables al comando (`Database__Proveedor=Sqlite … dotnet run`). SQLite es solo para demostración y pruebas; el proveedor real del proyecto es SQL Server.
+
+### 2. La app en Android
+
+1. Abra `PracticoN5ServicioApiRest.sln` en Visual Studio y deje la API corriendo (paso 1).
+2. Elija como proyecto de inicio **`PracticoN6.Frontend.Maui`**, un emulador Android (por ejemplo *Pixel 5 – API 34*) y ejecute.
+3. Inicie sesión con un [usuario de ejemplo](#usuarios-de-ejemplo).
+
+Por línea de comandos: `dotnet build PracticoN6.Frontend.Maui -t:Run -f net8.0-android`.
+
+**Dirección de la API**
+
+| Dónde corre la app | Dirección | Cómo configurarla |
+|---|---|---|
+| Emulador de Android | `http://10.0.2.2:5276` (la PC anfitriona) | Es la predeterminada |
+| Teléfono real | `http://<IP de la PC>:5276` | Arrancar la API con `dotnet run --launch-profile http-lan`, permitir el puerto 5276 en el firewall y escribir la dirección en la pantalla **Servidor** de la app (se abre desde el login o desde *Cuenta*) |
+
+En desarrollo la API usa **HTTP**, por eso el manifiesto de Android tiene `usesCleartextTraffic="true"` y la vista web permite contenido mixto (para las imágenes del catálogo). En producción conviene servir la API por HTTPS y quitar ambos ajustes.
+
+### 3. El host web (opcional)
+
+```bash
+dotnet run --project PracticoN6.Frontend.Web      # http://localhost:5190
+```
+
+Muestra las mismas pantallas en el navegador (conviene el modo dispositivo móvil de las herramientas de desarrollo). La dirección de la API se cambia en `PracticoN6.Frontend.Web/wwwroot/appsettings.json`.
+
+---
+
+## Usuarios de ejemplo
+
+Con `Seed:DatosDemo = true` (valor de la plantilla de configuración):
+
+| Usuario | Contraseña | Rol |
+|---|---|---|
+| `admin` | `Admin1234` | Administrador |
+| `operador` | `Demo1234` | Operador |
+| `cliente` | `Demo1234` | Cliente |
+
+**Pago simulado:** tarjeta `4242 4242 4242 4242` (cualquier número válido) → aprobado; número terminado en `0000` (por ejemplo `4000 0000 0000 0000`) → rechazado. No se realiza ningún cobro ni se guardan datos de tarjeta.
+
+> Cambie estas contraseñas (o ponga `Seed:DatosDemo` en `false`) fuera de un entorno de pruebas.
+
+---
+
+## Roles y permisos
+
+El registro público crea siempre un **Cliente**; los roles del personal los otorga un administrador (a diferencia del TP 5, donde el registro público daba permisos de operador).
+
+| Recurso | Cliente | Operador | Administrador |
+|---|:---:|:---:|:---:|
+| Ver catálogo y categorías, usar el carrito, pagar | ✅ | ✅ | ✅ |
+| Ver sus propios pedidos y comprobantes | ✅ | ✅ | ✅ |
+| Alta y edición de productos, ajustes de stock, imágenes, categorías | — | ✅ | ✅ |
+| Compras a proveedores (entradas), ventas y venta de mostrador, clientes, proveedores | — | ✅ | ✅ |
+| Movimientos de stock y reportes PDF | — | ✅ | ✅ |
+| Ver cualquier venta | — | ✅ | ✅ |
+| **Anular** compras y ventas · **eliminar** productos, categorías, proveedores, clientes | — | — | ✅ |
+| Usuarios y roles (alta, cambio de rol, activar/desactivar, baja) | — | — | ✅ |
+| Auditoría y registro de errores | — | — | ✅ |
+
+Reglas adicionales: no se puede degradar, desactivar ni eliminar al **único administrador**; nadie puede desactivarse o eliminarse a sí mismo; un usuario con historial (ventas, compras o movimientos) no se elimina sino que se **desactiva**; un cliente solo accede a *sus* ventas (las ajenas devuelven 404). El inicio de sesión tiene un límite de intentos por IP.
+
+---
+
+## Modelo de datos y normalización
+
+```mermaid
+erDiagram
+    ROL ||--o{ USUARIO : "tiene"
+    USUARIO |o--o| CLIENTE : "cuenta de"
+    CATEGORIA ||--o{ PRODUCTO : "agrupa"
+    PROVEEDOR ||--o{ COMPRA : "entrega"
+    CLIENTE ||--o{ VENTA : "realiza"
+    USUARIO |o--o{ COMPRA : "registra"
+    USUARIO |o--o{ VENTA : "registra"
+    COMPRA ||--|{ DETALLE_COMPRA : "contiene"
+    VENTA ||--|{ DETALLE_VENTA : "contiene"
+    PRODUCTO ||--o{ DETALLE_COMPRA : "se compra en"
+    PRODUCTO ||--o{ DETALLE_VENTA : "se vende en"
+    VENTA ||--o| PAGO : "se paga con"
+    MEDIO_PAGO ||--o{ PAGO : "usado en"
+    PRODUCTO ||--o{ MOVIMIENTO_STOCK : "registra"
+    COMPRA |o--o{ MOVIMIENTO_STOCK : "origina"
+    VENTA |o--o{ MOVIMIENTO_STOCK : "origina"
+    USUARIO |o--o{ MOVIMIENTO_STOCK : "realiza"
+```
+
+`RegistroAuditoria` y `RegistroError` son tablas independientes (ver más abajo por qué no llevan claves foráneas).
+
+**Tablas nuevas o modificadas en el TP 6:** `Roles`, `MediosPago`, `Pagos`, `MovimientosStock`, `RegistrosAuditoria`, `RegistrosError`; `Usuarios` (ahora con `RolId` y `Activo`), `Clientes` (`UsuarioId`), `Ventas` y `Compras` (`Anulada`, `FechaAnulacion`, `UsuarioId`).
+
+### Análisis de formas normales
+
+- **1FN** — Todas las columnas son atómicas y no hay grupos repetidos: las líneas de compra/venta están en su propia tabla (`DetalleCompra`, `DetalleVenta`) y no en columnas del documento.
+- **2FN** — Todas las tablas tienen clave primaria simple (un `Id` entero), así que no existen dependencias parciales.
+- **3FN** — No hay dependencias transitivas: el nombre del rol está en `Roles` (no en `Usuarios`); el medio de pago, en `MediosPago` (no repetido en `Pagos`); la categoría de un producto, en `Categorias`; los datos del cliente, en `Clientes` (la venta solo guarda `ClienteId`). El **total** de una venta o compra **no se almacena**: se calcula desde sus detalles, para evitar un dato derivado que pueda quedar desincronizado.
+
+Decisiones que conviene conocer (y poder justificar en la defensa):
+
+1. **`DetalleVenta.PrecioUnitario` y `DetalleCompra.PrecioUnitario` no son redundancia**: guardan el precio *al momento de la operación*, un hecho distinto del precio vigente (`Producto.Precio`).
+2. **`Producto.Stock` es una desnormalización deliberada**: es la suma de los `MovimientosStock` del producto. Se mantiene para consultar el stock sin recorrer el libro y para poder actualizarlo de forma atómica; el invariante *stock = suma de movimientos* está cubierto por una prueba automática. (La migración registra el stock previo de los productos existentes como movimiento de saldo inicial.)
+3. **`Cliente.Email` y `Usuario.Email`** son atributos distintos (correo de contacto vs. credencial de acceso). Al registrarse se copia el mismo valor como punto de partida, pero pueden diverger.
+4. **Auditoría y errores sin claves foráneas**: guardan el *nombre* del usuario como texto para que la traza sobreviva si el usuario se elimina.
+5. **Anular no borra**: compras y ventas anuladas se marcan (`Anulada`, `FechaAnulacion`), de modo que los movimientos de stock y la auditoría siguen apuntando a un documento real. (En el TP 5 se eliminaban.)
+6. `Cliente.Direccion` sigue siendo un único texto libre (no se separó en calle/ciudad/etc.).
+
+### Migración desde el TP 5
+
+`Migrations/…_Tp6BlazorHybrid` fue ajustada a mano para **conservar los datos**: convierte `Usuarios.Rol` (texto) en `RolId` mapeando por nombre, deja a los usuarios existentes **activos**, y carga el stock actual como saldo inicial en el libro de movimientos. Incluye `Down` que restituye el texto del rol.
 
 ---
 
 ## Endpoints de la API
 
-Todos los controladores usan la ruta `api/[controller]` y requieren `[Authorize]`, salvo: `UsuariosController` (que mezcla `[AllowAnonymous]` en `test` y `login` con `[Authorize]` por acción) y `WeatherForecastController` (plantilla sin autorizar y sin prefijo `api/`).
+Todos bajo `api/…`, con JWT (`Authorization: Bearer <token>`), salvo los marcados como públicos. Documentación interactiva en `/swagger`.
 
-### Categorías — `api/Categorias`
+| Recurso | Operaciones |
+|---|---|
+| **Usuarios** | `GET test` y `POST login` (públicos; el login devuelve `token`, `nombreUsuario`, `rol` y `expiraUtc`) · `POST registro` (público, crea un Cliente) · `GET/PUT yo` (perfil propio) · `GET`, `GET {id}`, `GET usuario/{nombre}`, `POST`, `PUT {id}`, `DELETE {id}` (Administrador) |
+| **Roles** | `GET` (Administrador) |
+| **Categorias** | `GET`, `GET {id}` (autenticado) · `POST`, `PUT {id}` (personal) · `DELETE {id}` (Administrador) |
+| **Productos** | `GET ?busqueda&categoriaId&soloDisponibles&orden&pagina&tamanoPagina` (orden: `nombre`, `precio_asc`, `precio_desc`, `recientes`) · `GET {id}` · `GET categoria/{id}` · `GET {id}/imagen` (**público**, para poder usar `<img>`) · `POST`, `PUT {id}`, `PATCH {id}/stock?observacion=…`, `POST {id}/imagen` (personal) · `DELETE {id}` (Administrador) |
+| **Ventas** | `POST checkout` y `GET mis-pedidos` (autenticado) · `GET {id}`, `GET {id}/comprobante`, `POST {id}/comprobante/enviar` (personal o dueño de la venta) · `GET`, `GET cliente/{id}`, `POST` (personal) · `POST {id}/anular` (Administrador) |
+| **Compras** | `GET`, `GET {id}`, `GET proveedor/{id}`, `POST` (personal) · `POST {id}/anular` (Administrador) |
+| **Clientes / Proveedores** | CRUD paginado (personal; `DELETE` solo Administrador) |
+| **DetallesCompra / DetallesVenta** | Consulta (personal) |
+| **MediosPago** | `GET` (autenticado) |
+| **MovimientosStock** | `GET ?desde&hasta&productoId&motivo&pagina&tamanoPagina` (personal) |
+| **Reportes** | `GET {tipo}` → PDF · `POST {tipo}/enviar` → correo con el PDF adjunto; `tipo` = `stock`, `entradas`, `salidas`, `movimientos` (personal) |
+| **Logs** | `GET auditoria`, `GET errores` (Administrador) · `POST errores` (autenticado: la app informa un error) |
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `api/Categorias` | Lista todas las categorías |
-| GET | `api/Categorias/{id}?incluirProductos=false` | Obtiene una categoría; opcionalmente incluye sus productos |
-| POST | `api/Categorias` | Crea una categoría |
-| PUT | `api/Categorias/{id}` | Actualiza una categoría |
-| DELETE | `api/Categorias/{id}` | Elimina una categoría (409 si tiene productos) |
+Convención de errores: `400` validación · `401` sin sesión · `402` pago rechazado · `403` sin permisos · `404` no encontrado · `409` regla de negocio (stock insuficiente, duplicados, referencias existentes) · `429` demasiados intentos de login · `500` error interno (con `codigoError`) · `502` el servidor de correo no respondió.
 
-### Productos — `api/Productos`
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `api/Productos?pagina=1&tamanoPagina=10` | Lista paginada de productos |
-| GET | `api/Productos/{id}` | Obtiene un producto |
-| GET | `api/Productos/categoria/{categoriaId}` | Productos de una categoría |
-| POST | `api/Productos` | Crea un producto (DTO `CreateProductoDTO` → responde `ResponseProductoDTO`) |
-| PUT | `api/Productos/{id}` | Actualiza un producto |
-| PATCH | `api/Productos/{id}/stock` | Ajusta el stock (400 si el resultado queda negativo) |
-| DELETE | `api/Productos/{id}` | Elimina un producto (409 si tiene historial en compras/ventas) |
-
-### Clientes — `api/Clientes`
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `api/Clientes?pagina=1&tamanoPagina=10` | Lista paginada de clientes |
-| GET | `api/Clientes/{id}?incluirVentas=false` | Obtiene un cliente; opcionalmente incluye sus ventas (con detalles y productos) |
-| POST | `api/Clientes` | Crea un cliente |
-| PUT | `api/Clientes/{id}` | Actualiza un cliente |
-| DELETE | `api/Clientes/{id}` | Elimina un cliente (409 si tiene ventas) |
-
-### Proveedores — `api/Proveedores`
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `api/Proveedores?pagina=1&tamanoPagina=10` | Lista paginada de proveedores |
-| GET | `api/Proveedores/{id}?incluirCompras=false` | Obtiene un proveedor; opcionalmente incluye sus compras |
-| POST | `api/Proveedores` | Crea un proveedor |
-| PUT | `api/Proveedores/{id}` | Actualiza un proveedor |
-| DELETE | `api/Proveedores/{id}` | Elimina un proveedor (409 si tiene compras) |
-
-### Compras — `api/Compras`
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `api/Compras?pagina=1&tamanoPagina=10` | Lista paginada de compras |
-| GET | `api/Compras/{id}` | Obtiene una compra con detalles y productos |
-| GET | `api/Compras/proveedor/{proveedorId}` | Compras de un proveedor |
-| POST | `api/Compras` | Registra una compra (DTO `CreateCompraDTO`); **incrementa stock** |
-| POST | `api/Compras/{id}/anular` | Anula una compra (409 si el stock ya no alcanza); **decrementa stock** |
-
-### Ventas — `api/Ventas`
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `api/Ventas?pagina=1&tamanoPagina=10` | Lista paginada de ventas |
-| GET | `api/Ventas/{id}` | Obtiene una venta con detalles y productos |
-| GET | `api/Ventas/cliente/{clienteId}` | Ventas de un cliente |
-| POST | `api/Ventas` | Registra una venta (DTO `CreateVentaDTO`); **decrementa stock** |
-| POST | `api/Ventas/{id}/anular` | Anula una venta; **reincorpora stock** |
-
-### Detalles — `api/DetallesCompra` y `api/DetallesVenta`
-
-Solo lectura (`[Authorize]`, sin mapeo de errores).
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `api/DetallesCompra/{id}` / `api/DetallesVenta/{id}` | Detalle por ID |
-| GET | `api/DetallesCompra/compra/{compraId}` / `api/DetallesVenta/venta/{ventaId}` | Detalles de un documento |
-| GET | `api/DetallesCompra/producto/{productoId}` / `api/DetallesVenta/producto/{productoId}` | Detalles de un producto |
-
-### Usuarios — `api/Usuarios`
-
-| Método | Ruta | Autorización | Descripción |
-|---|---|---|---|
-| GET | `api/Usuarios/test` | `[AllowAnonymous]` | Comprobación de que la API responde ("API funcionando") |
-| POST | `api/Usuarios/login` | `[AllowAnonymous]` | Login, devuelve el JWT |
-| GET | `api/Usuarios` | `[Authorize]` | Lista de usuarios |
-| GET | `api/Usuarios/{id}` | `[Authorize]` | Usuario por ID |
-| GET | `api/Usuarios/usuario/{nombreUsuario}` | `[Authorize]` | Usuario por nombre |
-| POST | `api/Usuarios` | `[Authorize]` | Crea un usuario (la contraseña se guarda hasheada) |
-| PUT | `api/Usuarios/{id}` | `[Authorize]` | Actualiza un usuario (rehashea solo si se envía nueva contraseña) |
-| DELETE | `api/Usuarios/{id}` | `[Authorize]` | Elimina un usuario |
+Los listados paginados devuelven `{ paginaActual, tamanoPagina, totalElementos, totalPaginas, elementos }` (tamaño máximo de página: 100) y ahora tienen **orden determinista**.
 
 ---
 
-## Flujos de negocio clave
+## Flujos de negocio
 
-### Registro de compra (incremento de stock)
+**Checkout (compra desde el carrito)** — `POST api/Ventas/checkout`
+1. El cliente envía solo productos y cantidades; **los precios los toma el servidor** del catálogo.
+2. En una transacción: se reserva el stock (`UPDATE … WHERE Stock + delta >= 0`), se simula el pago y se registran venta, detalles, pago y movimientos.
+3. Si el pago es rechazado (402) o falta stock (409), **no queda nada registrado**.
 
-`ComprasService.RegistrarCompraAsync`:
+**Control de stock** — todo cambio de stock pasa por `MovimientosStockService`: compras (+), ventas (−), anulaciones (± inversos), ajustes manuales y stock inicial. Cada movimiento guarda fecha, cantidad con signo, motivo, usuario y documento de origen.
 
-1. Valida que el detalle tenga al menos una línea y que el proveedor exista.
-2. Abre una transacción SQL.
-3. Por cada línea: valida `Cantidad > 0` y `PrecioUnitario > 0`, busca el producto (404 si no existe) y ejecuta `producto.Stock += Cantidad`.
-4. Construye la `Compra` con sus `DetalleCompra`, guarda y hace commit.
-5. Después del commit, recarga el proveedor y los detalles con producto para la respuesta.
-6. Cualquier error → rollback y re-lanzamiento.
+**Anulaciones** — `Administrador` únicamente. Anular una compra descuenta lo que había sumado (se rechaza con 409 si ese stock ya se vendió); anular una venta lo devuelve. Ninguna se borra.
 
-### Anulación de compra (decremento de stock)
+**Reportes PDF** — `stock` (inventario valorizado, con los productos bajo el mínimo en rojo; `Inventario:StockMinimo`), `entradas` (compras no anuladas del período), `salidas` (ventas no anuladas), `movimientos` y el comprobante de venta. Los períodos se interpretan en la **hora del negocio** (`Negocio:ZonaHoraria`, por defecto Argentina), aunque las fechas se guarden en UTC. En la app, el PDF se entrega con la hoja de compartir de Android (abrir, guardar o enviar).
 
-`ComprasService.AnularCompraAsync`:
-
-1. Abre transacción y carga la compra con sus detalles.
-2. Por cada detalle, recarga el producto y **valida que el stock actual sea suficiente** para revertir (`stock < Cantidad` → 409): si el stock comprado ya se vendió, no se puede anular.
-3. `producto.Stock -= Cantidad`.
-4. Elimina primero los detalles y luego la compra (por el `DeleteBehavior.Restrict`). Commit.
-
-### Registro de venta (decremento de stock)
-
-`VentasService.RegistrarVentaAsync`:
-
-1. Valida que el detalle tenga al menos una línea y que el cliente exista.
-2. Abre transacción.
-3. Por cada línea: valida cantidades, **verifica stock suficiente** (`stock < Cantidad` → 409) y ejecuta `producto.Stock -= Cantidad`.
-4. Guarda la `Venta` con sus `DetalleVenta`, commit, recarga datos relacionados para la respuesta.
-
-### Anulación de venta (reincorporación de stock)
-
-`VentasService.AnularVentaAsync`:
-
-1. Abre transacción y carga la venta con sus detalles.
-2. Por cada detalle recarga el producto y ejecuta `producto.Stock += Cantidad` (no requiere validación de suficiencia porque suma stock).
-3. Elimina detalles y venta. Commit.
-
-### Ajuste manual de stock
-
-`ProductosService.ActualizarStockAsync` (PATCH `api/Productos/{id}/stock`) modifica el stock en forma directa; rechaza con `InvalidOperationException` si el resultado quedara negativo.
+**Correo** — se envía por SMTP si `Smtp:Host` está configurado. Sin SMTP la API **no finge haber enviado**: guarda el mensaje como `.eml` en `App_Data/Correos` y responde `enviado: false` con una explicación, que la app muestra. Un cliente recibe sus comprobantes siempre en el correo de su cuenta (no puede usar el servidor para enviar a terceros).
 
 ---
 
-## Paginación
+## Auditoría y registro de errores
 
-Los endpoints de listado (`Clientes`, `Productos`, `Proveedores`, `Compras`, `Ventas`) aceptan los parámetros de query:
-
-- `pagina` (default `1`)
-- `tamanoPagina` (default `10`, máximo `100`)
-
-Devuelven `ResultadoPaginadoDto<T>`:
-
-```json
-{
-  "paginaActual": 1,
-  "tamanoPagina": 10,
-  "totalElementos": 57,
-  "totalPaginas": 6,
-  "elementos": []
-}
-```
-
-`Categorias` no usa paginación (devuelve la lista completa).
-
----
-
-## Manejo de errores
-
-Convención general: los servicios lanzan excepciones con mensajes en español y los controllers las convierten en códigos HTTP:
-
-| Excepción | Código HTTP | Significado |
-|---|---|---|
-| `ArgumentException` | 400 BadRequest | Validación de entrada |
-| `KeyNotFoundException` | 404 NotFound | Recurso no encontrado |
-| `InvalidOperationException` | 409 Conflict | Regla de negocio: duplicados, referencias existentes, stock insuficiente |
-| JWT fallido / credenciales inválidas | 401 Unauthorized | Autenticación |
-| Sin permisos | 403 Forbidden | Autorización |
-
-> **Nota conocida**: `Registrar` de Compras y Ventas mapea `InvalidOperationException` → **400**, mientras que el resto de los controllers la mapean → **409**. Es una inconsistencia intencionada o pendiente de unificar según el caso.
+- **Auditoría** (`AuditoriaFilter`): registra usuario, acción, recurso, id, ruta, IP, fecha y código de respuesta de toda acción que modifica datos (POST/PUT/PATCH/DELETE), de los inicios de sesión (con el usuario intentado, sin la contraseña) y de la generación/envío de reportes. Nunca guarda el cuerpo de la petición. Las operaciones rechazadas también quedan (con su código). Se escribe con un `DbContext` propio, para que no arrastre cambios pendientes de una operación que falló.
+- **Errores** (`ManejoErroresMiddleware`): toda excepción no controlada se guarda (mensaje, tipo, *stack trace*, ruta, método, usuario) y el usuario recibe un `500` genérico con un **código de error** (el detalle técnico nunca se le muestra). La app también informa sus propios errores (`POST api/Logs/errores`) desde un `ErrorBoundary` global.
+- El administrador los consulta en la app: **Panel → Auditoría** y **Panel → Errores** (con filtros y paginación).
 
 ---
 
 ## Configuración
 
-Se requiere en `appsettings.json` (o variante por entorno):
+Ver `PracticoN5ServicioApiRest/appsettings.example.json`.
 
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "<cadena de conexión a SQL Server>"
-  },
-  "Jwt": {
-    "Key": "<clave secreta de firma>",
-    "Issuer": "MiWebApi"
-  }
-}
+| Clave | Para qué |
+|---|---|
+| `ConnectionStrings:DefaultConnection` | Cadena de conexión (SQL Server; o archivo SQLite en modo demostración) |
+| `Jwt:Key`, `Jwt:Issuer`, `Jwt:ExpirationMinutes` | Firma y vigencia del token (la clave debe tener 32 caracteres o más) |
+| `Database:AplicarMigraciones` | Aplica las migraciones al arrancar |
+| `Database:Proveedor` / `Database:CrearEsquema` | `Sqlite` / `true` solo para el modo demostración |
+| `Seed:AdminUsuario`, `Seed:AdminEmail`, `Seed:AdminPassword` | Administrador inicial (se crea solo si no existe ninguno; sin contraseña no se crea) |
+| `Seed:DatosDemo`, `Seed:PasswordDemo` | Catálogo y usuarios `operador`/`cliente` de ejemplo |
+| `Negocio:Nombre`, `Negocio:ZonaHoraria` | Encabezado de los PDF y zona horaria de los reportes |
+| `Inventario:StockMinimo` | Umbral de "stock bajo" del reporte |
+| `RateLimit:LoginPorMinuto` | Intentos de login por minuto y por IP |
+| `Smtp:Host`, `Puerto`, `UsarSsl`, `Usuario`, `Password`, `Remitente`, `NombreRemitente` | Envío de correos |
+
+---
+
+## Pruebas y qué se verificó
+
+| Suite | Cantidad | Qué cubre |
+|---|---:|---|
+| `PracticoN5ServicioApiRest.Tests` | 160 | Autenticación, **matriz de acceso por rol**, catálogo (búsqueda, filtros, orden, paginación), stock y movimientos, compras/ventas/anulaciones, checkout (precios del servidor, pago aprobado/rechazado, rollback, última unidad), reportes y correo, auditoría, registro de errores, gestión de usuarios. Corren la API completa en memoria con SQLite. |
+| `PracticoN6.Frontend.Shared.Tests` | 63 | Cliente HTTP (token, mensajes de error, sesión vencida, sin conexión), sesión y restauración, carrito por usuario, formato de importes y fechas, configuración del servidor. |
+| `e2e/` (Playwright) | 2 recorridos | La **interfaz real** en un navegador con tamaño de teléfono, contra la API real: login, catálogo, carrito, pago rechazado y aprobado, comprobante PDF, y todo el flujo del personal (productos con imagen, stock, compras, movimientos, reportes, usuarios, auditoría, restricciones por rol). |
+
+```bash
+dotnet test PracticoN5ServicioApiRest.Tests
+dotnet test PracticoN6.Frontend.Shared.Tests
+# e2e: con la API (modo demostración) y el host web corriendo
+cd e2e && npm install && npx playwright install chromium && npm run cliente && npm run personal
 ```
 
-- **CORS**: política `"Permissive"` (`AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()`).
-- **Swagger**: habilitado en todos los entornos, con esquema de seguridad Bearer. `GET /` redirige a `/swagger`.
+Las pruebas encontraron y se corrigieron varios defectos reales durante el desarrollo; los más relevantes: una operación revertida dejaba entidades pendientes que luego guardaba la auditoría (compras/ventas "fantasma"), las listas paginadas del TP 5 no tenían orden determinista, y un botón que exigía dos toques en pantallas táctiles por enlazarse al evento equivocado (lo detectó el recorrido en el navegador).
+
+### Qué **no** se pudo verificar (a tener en cuenta)
+
+El desarrollo y las pruebas se hicieron en un entorno Linux sin acceso al SDK de Android ni a SQL Server. Por lo tanto:
+
+- **La compilación y ejecución de `PracticoN6.Frontend.Maui` en Android no se probó.** Se escribió siguiendo la plantilla oficial de .NET 8 y se comprobó que su código C# compila contra los paquetes reales de MAUI (con el XAML simulado), y que toda la interfaz que hospeda funciona en el navegador. Falta la prueba en un emulador/dispositivo: es lo primero que conviene hacer.
+- **La migración no se ejecutó contra SQL Server**: se revisó el script SQL que genera (`dotnet-ef migrations script`) pero las pruebas automáticas usan SQLite (que crea el esquema directamente). Pruébela primero sobre una copia de la base del TP 5.
+- **El envío real por SMTP no se probó** (sí el armado del mensaje con su PDF adjunto, que se verifica en el `.eml` generado).
 
 ---
 
-## Cómo ejecutar el proyecto
+## Trabajo en equipo y Git
 
-1. Configurar `ConnectionStrings:DefaultConnection` y `Jwt:Key` en `appsettings.*.json`.
-2. Aplicar la migración de la base de datos:
+El TP se desarrolla en **grupos de 2 alumnos** con **repositorio Git**.
 
-   ```bash
-   dotnet ef database update
-   ```
-
-3. Ejecutar la API:
-
-   ```bash
-   dotnet run
-   ```
-
-4. Abrir Swagger en `https://localhost:<puerto>/swagger`.
-5. Crear un usuario inicial (POST `api/Usuarios`) o usar uno existente, hacer login y obtener el token para autorizar las demás llamadas.
-
-> La base de datos se crea con la migración inicial `MigracionInicial` (2026-09-04). No se ejecuta `EnsureCreated` ni se aplican migraciones automáticamente al arrancar.
+- **Integrantes:** _(completar con los nombres de los dos alumnos)_
+- Rama principal protegida; cada integrante trabaja en ramas cortas (`feature/…`, `fix/…`) y las integra por *pull request* revisado por el otro.
+- Commits chicos y descriptivos; el trabajo del TP 6 parte del TP 5 y está en la rama `tp6-blazor-hybrid`.
+- Antes de integrar: `dotnet test` de ambas suites.
 
 ---
 
-## Convenciones y deuda técnica conocida
+## Limitaciones y mejoras posibles
 
-**Convenciones**
+- Pago **simulado**: no hay integración con una pasarela real.
+- Sin recuperación de contraseña ni cambio de contraseña propio (el administrador puede restablecerla editando el usuario).
+- El token no se renueva: al vencer (`Jwt:ExpirationMinutes`) la app pide iniciar sesión de nuevo.
+- La imagen de cada producto se sirve sin redimensionar; para un catálogo grande convendría generar miniaturas.
+- Las pantallas de administración están pensadas para teléfono; en tablet o PC funcionan pero sin un diseño de escritorio.
+- CORS permisivo (origen libre) heredado del TP 5: como la autenticación usa un header (no cookies) no hay riesgo de CSRF, pero en producción conviene limitarlo a los orígenes conocidos.
+- Los secretos de `appsettings` no deben versionarse; en producción usar *user secrets* o variables de entorno.
 
-- Código en español; PascalCase en clases, métodos, propiedades y DTOs; camelCase en variables y parámetros; prefijo `_` en campos privados.
-- Arquitectura estricta `Controller → Service → DbContext`.
-- Sólo los flujos que tocan stock usan transacciones.
-- Mapeo manual de DTOs (no se usa AutoMapper).
-
-**Deuda técnica / pendientes detectados**
-
-- Uso inconsistente de DTOs: `Productos`, `Compras`, `Ventas` y el login usan DTOs; `Categorias`, `Clientes`, `Proveedores` y `Usuarios` (alta/edición) enlazan la entidad de dominio directamente como body (riesgo de sobre-publicación y contrato acoplado a EF).
-- `ResponseProductoDTO.Categoria` (string) está declarado pero nunca se rellena en `ProductosService`.
-- `InvalidOperationException` mapea a 400 en unos controllers y a 409 en otros (ver [Manejo de errores](#manejo-de-errores)).
-- `DetallesCompraController` y `DetallesVentaController` no capturan errores; las excepciones del servicio terminan como 500.
-- Gran duplicación: el bloque de paginación está copiado en 5 servicios; `ComprasService`/`VentasService` son casi espejo; igual `DetallesCompraService`/`DetallesVentaService` y `ClientesService`/`ProveedoresService`.
-- `WeatherForecastController` y `WeatherForecast` son restos de la plantilla (ruta sin `api/`, sincrónicos, anónimos).
-- `CategoriasController` no pagina la lista, a diferencia del resto.
-- `ProductosService.GetProductosAsync` es un método "compatibilidad" aparentemente sin uso real.
-- Patrón N+1 en los bucles de registro/anulación de Compras y Ventas: los productos se recargan de a uno con `FirstOrDefaultAsync` en lugar de una consulta por lotes.
-- `Program.cs` contiene literales con la codificación alterada (`sesi�n`, `producci�n`).
-- Los secretos (`Jwt:Key`, contraseñas de base de datos) están versionados en los `appsettings.*.json`. Se recomienda rotarlos y moverlos a secretos de usuario o variables de entorno.
+**Licencias:** los PDF se generan con [QuestPDF](https://www.questpdf.com) bajo su licencia *Community* (gratuita para uso educativo, individuos y empresas pequeñas); el envío de correo usa MailKit.

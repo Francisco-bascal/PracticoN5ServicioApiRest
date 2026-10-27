@@ -1,0 +1,60 @@
+@page "/carrito"
+@attribute [Authorize]
+@implements IDisposable
+@inject CarritoService Carrito
+@inject NavigationManager Navegacion
+
+<div class="pagina">
+    <h1>Mi carrito</h1>
+
+    @if (Carrito.EstaVacio)
+    {
+        <div class="vacio">
+            <div class="vacio-icono">🛒</div>
+            <p>Su carrito está vacío.</p>
+            <a class="btn btn-primario" href="">Ver el catálogo</a>
+        </div>
+    }
+    else
+    {
+        @foreach (var item in Carrito.Items)
+        {
+            <div class="fila">
+                <div class="fila-cuerpo">
+                    <a class="fila-titulo" href="producto/@item.ProductoId" style="color:inherit;text-decoration:none">@item.Nombre</a>
+                    <div class="fila-detalle">@Formato.Dinero(item.PrecioUnitario) c/u</div>
+                    <div style="margin-top:6px">
+                        <SelectorCantidad Valor="item.Cantidad" Minimo="1" Maximo="Math.Max(item.Stock, 1)"
+                                          ValorChanged="cantidad => Carrito.CambiarCantidadAsync(item.ProductoId, cantidad)" />
+                    </div>
+                    @if (item.Cantidad >= item.Stock)
+                    {
+                        <div class="pequeno suave">Máximo disponible</div>
+                    }
+                </div>
+                <div class="fila-derecha">
+                    <div class="fila-titulo">@Formato.Dinero(item.Subtotal)</div>
+                    <button class="btn btn-enlace" style="color:var(--peligro)" @onclick="() => Carrito.QuitarAsync(item.ProductoId)">Quitar</button>
+                </div>
+            </div>
+        }
+
+        <div class="total">
+            <span>Total (@Carrito.Unidades @(Carrito.Unidades == 1 ? "unidad" : "unidades"))</span>
+            <span>@Formato.Dinero(Carrito.Total)</span>
+        </div>
+
+        <div class="acciones">
+            <button class="btn btn-secundario" @onclick="Carrito.VaciarAsync">Vaciar</button>
+            <button class="btn btn-acento" @onclick="@(() => Navegacion.NavigateTo("checkout"))">Continuar con el pago</button>
+        </div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => Carrito.Cambio += AlCambiar;
+
+    private void AlCambiar() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Carrito.Cambio -= AlCambiar;
+}

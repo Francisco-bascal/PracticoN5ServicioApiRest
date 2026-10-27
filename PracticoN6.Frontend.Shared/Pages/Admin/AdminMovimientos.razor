@@ -1,0 +1,104 @@
+@page "/admin/movimientos"
+@attribute [Authorize(Roles = Roles.Personal)]
+@inject TiendaApi Tienda
+
+<div class="pagina">
+    <h1>Movimientos de stock</h1>
+    <p class="suave">Libro de entradas y salidas: compras, ventas, anulaciones y ajustes.</p>
+
+    <div class="fila-campos">
+        <div class="campo">
+            <label for="desde">Desde</label>
+            <input id="desde" type="date" @bind="_desde" @bind:format="yyyy-MM-dd" />
+        </div>
+        <div class="campo">
+            <label for="hasta">Hasta</label>
+            <input id="hasta" type="date" @bind="_hasta" @bind:format="yyyy-MM-dd" />
+        </div>
+    </div>
+    <div class="campo">
+        <label for="motivo">Motivo</label>
+        <select id="motivo" @bind="_motivo">
+            <option value="">Todos</option>
+            @foreach (var motivo in Motivos)
+            {
+                <option value="@motivo">@Formato.EtiquetaMotivo(motivo)</option>
+            }
+        </select>
+    </div>
+    <button class="btn btn-primario btn-bloque" @onclick="Filtrar">Filtrar</button>
+
+    @if (_error != null)
+    {
+        <Alerta Tipo="error">@_error</Alerta>
+    }
+    else if (_pagina == null)
+    {
+        <Cargando />
+    }
+    else if (_pagina.Elementos.Count == 0)
+    {
+        <div class="vacio"><div class="vacio-icono">🔄</div><p>No hay movimientos para esos filtros.</p></div>
+    }
+    else
+    {
+        <p class="pequeno suave" style="margin-top:14px">@_pagina.TotalElementos movimientos</p>
+
+        @foreach (var movimiento in _pagina.Elementos)
+        {
+            <div class="fila">
+                <div class="fila-cuerpo">
+                    <div class="fila-titulo">@movimiento.Producto</div>
+                    <div class="fila-detalle">
+                        @Formato.FechaHora(movimiento.Fecha) · @Formato.EtiquetaMotivo(movimiento.Motivo)
+                        @if (movimiento.CompraId != null) { <text> · Compra @movimiento.CompraId</text> }
+                        @if (movimiento.VentaId != null) { <text> · Venta @movimiento.VentaId</text> }
+                        @if (!string.IsNullOrWhiteSpace(movimiento.Usuario)) { <text> · @movimiento.Usuario</text> }
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(movimiento.Observacion))
+                    {
+                        <div class="fila-detalle">“@movimiento.Observacion”</div>
+                    }
+                </div>
+                <div class="fila-derecha @(movimiento.Cantidad > 0 ? "positivo" : "negativo")">@(movimiento.Cantidad > 0 ? "+" : "")@movimiento.Cantidad</div>
+            </div>
+        }
+
+        <Paginador Pagina="_numero" TotalPaginas="_pagina.TotalPaginas" PaginaCambiada="IrAPagina" />
+    }
+</div>
+
+@code {
+    private static readonly string[] Motivos = { "StockInicial", "Compra", "Venta", "AnulacionCompra", "AnulacionVenta", "AjusteManual" };
+
+    private Pagina<Movimiento>? _pagina;
+    private DateTime? _desde;
+    private DateTime? _hasta;
+    private string _motivo = string.Empty;
+    private int _numero = 1;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Cargar();
+
+    private Task Filtrar() => IrAPagina(1);
+
+    private Task IrAPagina(int numero)
+    {
+        _numero = numero;
+        return Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        _error = null;
+
+        try
+        {
+            _pagina = await Tienda.ObtenerMovimientosAsync(_desde, _hasta, _motivo, _numero);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

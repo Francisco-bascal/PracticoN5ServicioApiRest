@@ -10,6 +10,7 @@ namespace PracticoN5ServicioApiRest.DTOs
         public string Mensaje { get; set; } = string.Empty;
         [MaxLength(200)]
         public string? TipoExcepcion { get; set; }
+        [MaxLength(8000)]
         public string? StackTrace { get; set; }
         [MaxLength(300)]
         public string? Ruta { get; set; }

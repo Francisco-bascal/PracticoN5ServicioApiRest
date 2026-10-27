@@ -1,0 +1,155 @@
+@page "/"
+@attribute [Authorize]
+@inject TiendaApi Tienda
+@inject NotificacionesService Notificaciones
+
+<div class="pagina">
+    <form class="buscador" @onsubmit="Buscar" @onsubmit:preventDefault>
+        <input type="search" placeholder="Buscar productos" aria-label="Buscar productos" @bind="_busqueda" enterkeyhint="search" />
+        <button class="btn btn-primario" type="submit" aria-label="Buscar">🔍</button>
+    </form>
+
+    <div class="chips" role="tablist" aria-label="Categorías">
+        <button class="chip @(_categoriaId == null ? "activo" : "")" @onclick="() => ElegirCategoria(null)">Todas</button>
+        @foreach (var categoria in _categorias)
+        {
+            <button class="chip @(_categoriaId == categoria.CategoriaId ? "activo" : "")" @onclick="() => ElegirCategoria(categoria.CategoriaId)">@categoria.Nombre</button>
+        }
+    </div>
+
+    <div class="filtros">
+        <select aria-label="Ordenar por" value="@_orden" @onchange="CambiarOrden">
+            <option value="nombre">Ordenar: Nombre</option>
+            <option value="precio_asc">Menor precio</option>
+            <option value="precio_desc">Mayor precio</option>
+            <option value="recientes">Más recientes</option>
+        </select>
+        <label class="casilla">
+            <input type="checkbox" checked="@_soloDisponibles" @onchange="CambiarDisponibles" /> Solo con stock
+        </label>
+    </div>
+
+    @if (_error != null)
+    {
+        <Alerta Tipo="error">@_error</Alerta>
+        <button class="btn btn-secundario" @onclick="Recargar">Reintentar</button>
+    }
+    else if (_cargando && _productos.Count == 0)
+    {
+        <Cargando Texto="Cargando catálogo..." />
+    }
+    else if (_productos.Count == 0)
+    {
+        <div class="vacio">
+            <div class="vacio-icono">🔎</div>
+            <p>No encontramos productos con esos filtros.</p>
+        </div>
+    }
+    else
+    {
+        <p class="pequeno suave">@_total @(_total == 1 ? "producto" : "productos")</p>
+
+        <div class="grilla-productos">
+            @foreach (var producto in _productos)
+            {
+                <TarjetaProducto Producto="producto" Agregado="AlAgregar" />
+            }
+        </div>
+
+        @if (_productos.Count < _total)
+        {
+            <div class="acciones">
+                <button class="btn btn-secundario" disabled="@_cargando" @onclick="VerMas">@(_cargando ? "Cargando..." : "Ver más productos")</button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private readonly List<Producto> _productos = new();
+    private List<Categoria> _categorias = new();
+    private string _busqueda = string.Empty;
+    private string _busquedaAplicada = string.Empty;
+    private int? _categoriaId;
+    private bool _soloDisponibles;
+    private string _orden = "nombre";
+    private int _pagina = 1;
+    private int _total;
+    private bool _cargando;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _categorias = await Tienda.ObtenerCategoriasAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+            return;
+        }
+
+        await Recargar();
+    }
+
+    private Task Buscar()
+    {
+        _busquedaAplicada = _busqueda;
+        return Recargar();
+    }
+
+    private Task ElegirCategoria(int? id)
+    {
+        _categoriaId = id;
+        return Recargar();
+    }
+
+    private Task CambiarOrden(ChangeEventArgs e)
+    {
+        _orden = e.Value?.ToString() ?? "nombre";
+        return Recargar();
+    }
+
+    private Task CambiarDisponibles(ChangeEventArgs e)
+    {
+        _soloDisponibles = e.Value is true;
+        return Recargar();
+    }
+
+    private Task Recargar()
+    {
+        _pagina = 1;
+        _productos.Clear();
+        return CargarPaginaAsync();
+    }
+
+    private Task VerMas()
+    {
+        _pagina++;
+        return CargarPaginaAsync();
+    }
+
+    private async Task CargarPaginaAsync()
+    {
+        _cargando = true;
+        _error = null;
+
+        try
+        {
+            var resultado = await Tienda.BuscarProductosAsync(_busquedaAplicada, _categoriaId, _soloDisponibles, _orden, _pagina);
+            _productos.AddRange(resultado.Elementos);
+            _total = resultado.TotalElementos;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private void AlAgregar(string mensaje) => Notificaciones.Mostrar(mensaje);
+}

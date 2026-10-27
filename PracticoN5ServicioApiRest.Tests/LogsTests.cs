@@ -161,6 +161,24 @@ namespace PracticoN5ServicioApiRest.Tests
         }
 
         [Fact]
+        public async Task ElErrorInformadoPorLaApp_TieneUnTamanoMaximo()
+        {
+            var cliente = await _fabrica.ClienteDemoAsync();
+
+            var respuesta = await cliente.PostAsJsonAsync("/api/Logs/errores", new { mensaje = "x", stackTrace = new string('a', 8001) });
+
+            Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+        }
+
+        [Fact]
+        public async Task TodasLasRespuestasIndicanQueNoSeAdivineElTipoDeContenido()
+        {
+            var respuesta = await _fabrica.CreateClient().GetAsync("/api/Usuarios/test");
+
+            Assert.Equal("nosniff", respuesta.Headers.GetValues("X-Content-Type-Options").Single());
+        }
+
+        [Fact]
         public async Task InformarUnErrorSinMensaje_Devuelve400_YSinTokenDevuelve401()
         {
             var cliente = await _fabrica.ClienteDemoAsync();

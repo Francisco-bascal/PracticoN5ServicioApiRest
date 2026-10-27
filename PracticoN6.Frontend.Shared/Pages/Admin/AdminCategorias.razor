@@ -1,0 +1,149 @@
+@page "/admin/categorias"
+@attribute [Authorize(Roles = Roles.Personal)]
+@inject TiendaApi Tienda
+@inject SesionService Sesion
+@inject NotificacionesService Notificaciones
+
+<div class="pagina">
+    <h1>Categorías</h1>
+
+    <div class="tarjeta">
+        <h3>@(_editandoId == null ? "Nueva categoría" : "Editar categoría")</h3>
+        <EditForm Model="_formulario" OnValidSubmit="Guardar">
+            <DataAnnotationsValidator />
+            <div class="campo">
+                <label for="nombre">Nombre</label>
+                <InputText id="nombre" @bind-Value="_formulario.Nombre" />
+                <ValidationMessage For="() => _formulario.Nombre" />
+            </div>
+            <div class="campo">
+                <label for="descripcion">Descripción (opcional)</label>
+                <InputText id="descripcion" @bind-Value="_formulario.Descripcion" />
+            </div>
+            @if (_error != null)
+            {
+                <Alerta Tipo="error">@_error</Alerta>
+            }
+            <div class="acciones">
+                <button class="btn btn-primario" type="submit" disabled="@_guardando">@(_editandoId == null ? "Agregar" : "Guardar")</button>
+                @if (_editandoId != null)
+                {
+                    <button class="btn btn-secundario" type="button" @onclick="CancelarEdicion">Cancelar</button>
+                }
+            </div>
+        </EditForm>
+    </div>
+
+    @if (_categorias == null)
+    {
+        <Cargando />
+    }
+    else
+    {
+        @foreach (var categoria in _categorias)
+        {
+            <div class="fila">
+                <div class="fila-cuerpo">
+                    <div class="fila-titulo">@categoria.Nombre</div>
+                    @if (!string.IsNullOrWhiteSpace(categoria.Descripcion))
+                    {
+                        <div class="fila-detalle">@categoria.Descripcion</div>
+                    }
+                </div>
+                <button class="btn btn-secundario btn-chico" @onclick="() => Editar(categoria)">Editar</button>
+                @if (Sesion.EsAdministrador)
+                {
+                    <button class="btn btn-peligro btn-chico" @onclick="() => _porEliminar = categoria">Eliminar</button>
+                }
+            </div>
+        }
+    }
+</div>
+
+<DialogoConfirmacion Visible="_porEliminar != null" Titulo="Eliminar categoría" Peligro="true" TextoConfirmar="Eliminar"
+                     Mensaje="@($"¿Eliminar la categoría «{_porEliminar?.Nombre}»? Solo es posible si no tiene productos.")"
+                     Confirmado="Eliminar" Cancelado="() => _porEliminar = null" />
+
+@code {
+    private List<Categoria>? _categorias;
+    private FormularioCategoria _formulario = new();
+    private int? _editandoId;
+    private Categoria? _porEliminar;
+    private string? _error;
+    private bool _guardando;
+
+    protected override Task OnInitializedAsync() => Cargar();
+
+    private async Task Cargar()
+    {
+        try
+        {
+            _categorias = await Tienda.ObtenerCategoriasAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Editar(Categoria categoria)
+    {
+        _editandoId = categoria.CategoriaId;
+        _formulario = new FormularioCategoria { Nombre = categoria.Nombre, Descripcion = categoria.Descripcion };
+        _error = null;
+    }
+
+    private void CancelarEdicion()
+    {
+        _editandoId = null;
+        _formulario = new FormularioCategoria();
+        _error = null;
+    }
+
+    private async Task Guardar()
+    {
+        _guardando = true;
+        _error = null;
+
+        try
+        {
+            if (_editandoId == null)
+            {
+                await Tienda.CrearCategoriaAsync(_formulario);
+            }
+            else
+            {
+                await Tienda.ActualizarCategoriaAsync(_editandoId.Value, _formulario);
+            }
+
+            Notificaciones.Exito("Categoría guardada.");
+            CancelarEdicion();
+            await Cargar();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private async Task Eliminar()
+    {
+        var categoria = _porEliminar!;
+        _porEliminar = null;
+
+        try
+        {
+            await Tienda.EliminarCategoriaAsync(categoria.CategoriaId);
+            Notificaciones.Exito("Categoría eliminada.");
+            await Cargar();
+        }
+        catch (ApiException ex)
+        {
+            Notificaciones.Error(ex.Message);
+        }
+    }
+}

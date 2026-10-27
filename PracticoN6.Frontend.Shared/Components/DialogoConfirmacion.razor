@@ -1,0 +1,27 @@
+@* Confirmación modal. No usa los diálogos de JavaScript porque la vista web de Android no los muestra. *@
+@if (Visible)
+{
+    <div class="dialogo-fondo" @onclick="Cancelar">
+        <div class="dialogo" role="alertdialog" aria-modal="true" aria-labelledby="dialogo-titulo" @onclick:stopPropagation="true">
+            <h2 id="dialogo-titulo">@Titulo</h2>
+            <p>@Mensaje</p>
+            <div class="dialogo-acciones">
+                <button class="btn btn-secundario" @onclick="Cancelar">Cancelar</button>
+                <button class="btn @(Peligro ? "btn-peligro" : "btn-primario")" @onclick="Confirmar">@TextoConfirmar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public string Titulo { get; set; } = "Confirmar";
+    [Parameter] public string Mensaje { get; set; } = string.Empty;
+    [Parameter] public string TextoConfirmar { get; set; } = "Aceptar";
+    [Parameter] public bool Peligro { get; set; }
+    [Parameter] public EventCallback Confirmado { get; set; }
+    [Parameter] public EventCallback Cancelado { get; set; }
+
+    private Task Confirmar() => Confirmado.InvokeAsync();
+    private Task Cancelar() => Cancelado.InvokeAsync();
+}

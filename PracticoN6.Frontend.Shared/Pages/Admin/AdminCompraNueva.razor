@@ -1,0 +1,189 @@
+@page "/admin/compras/nueva"
+@attribute [Authorize(Roles = Roles.Personal)]
+@inject TiendaApi Tienda
+@inject NotificacionesService Notificaciones
+@inject NavigationManager Navegacion
+
+<div class="pagina">
+    <h1>Registrar entrada</h1>
+
+    @if (_cargando)
+    {
+        <Cargando />
+    }
+    else
+    {
+        <div class="campo">
+            <label for="proveedor">Proveedor</label>
+            <select id="proveedor" @bind="_proveedorId">
+                <option value="0">Elija un proveedor</option>
+                @foreach (var proveedor in _proveedores)
+                {
+                    <option value="@proveedor.ProveedorId">@proveedor.Nombre</option>
+                }
+            </select>
+            @if (_proveedores.Count == 0)
+            {
+                <div class="campo-error">No hay proveedores: <a href="admin/proveedores">cargue uno primero</a>.</div>
+            }
+        </div>
+
+        <h2>Productos</h2>
+        <form class="buscador" @onsubmit="BuscarProductos" @onsubmit:preventDefault>
+            <input type="search" placeholder="Buscar producto para agregar" aria-label="Buscar producto" @bind="_busqueda" enterkeyhint="search" />
+            <button class="btn btn-primario" type="submit" aria-label="Buscar">🔍</button>
+        </form>
+
+        @if (_resultados.Count > 0)
+        {
+            <div class="tarjeta" style="padding:6px">
+                @foreach (var producto in _resultados)
+                {
+                    <button class="fila" style="width:100%;border:0;text-align:left;box-shadow:none" @onclick="() => Agregar(producto)">
+                        <div class="fila-cuerpo">
+                            <div class="fila-titulo">@producto.Nombre</div>
+                            <div class="fila-detalle">Stock actual: @producto.Stock</div>
+                        </div>
+                        <span class="btn btn-secundario btn-chico">Agregar</span>
+                    </button>
+                }
+            </div>
+        }
+
+        @foreach (var linea in _lineas)
+        {
+            <div class="tarjeta">
+                <div class="fila-titulo">@linea.Producto</div>
+                <div class="fila-campos" style="margin-top:8px">
+                    <div class="campo" style="margin:0">
+                        <label>Cantidad</label>
+                        <input type="number" min="1" inputmode="numeric" @bind="linea.Cantidad" @bind:event="oninput" />
+                    </div>
+                    <div class="campo" style="margin:0">
+                        <label>Costo unitario ($)</label>
+                        <input type="number" min="0.01" step="0.01" inputmode="decimal" @bind="linea.PrecioUnitario" @bind:event="oninput" />
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+                    <strong>@Formato.Dinero(linea.Subtotal)</strong>
+                    <button class="btn btn-enlace" style="color:var(--peligro)" @onclick="() => _lineas.Remove(linea)">Quitar</button>
+                </div>
+            </div>
+        }
+
+        @if (_lineas.Count > 0)
+        {
+            <div class="total"><span>Total</span><span>@Formato.Dinero(_lineas.Sum(l => l.Subtotal))</span></div>
+        }
+
+        @if (_error != null)
+        {
+            <Alerta Tipo="error">@_error</Alerta>
+        }
+
+        <button class="btn btn-primario btn-bloque" disabled="@_guardando" @onclick="Registrar">@(_guardando ? "Registrando..." : "Registrar entrada")</button>
+    }
+</div>
+
+@code {
+    private List<Proveedor> _proveedores = new();
+    private readonly List<LineaCompra> _lineas = new();
+    private List<Producto> _resultados = new();
+    private int _proveedorId;
+    private string _busqueda = string.Empty;
+    private string? _error;
+    private bool _cargando = true;
+    private bool _guardando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _proveedores = (await Tienda.ObtenerProveedoresAsync()).Elementos;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task BuscarProductos()
+    {
+        try
+        {
+            _resultados = (await Tienda.BuscarProductosAsync(_busqueda, null, false, "nombre", 1, 6)).Elementos;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Agregar(Producto producto)
+    {
+        var existente = _lineas.FirstOrDefault(l => l.ProductoId == producto.ProductoId);
+
+        if (existente != null)
+        {
+            existente.Cantidad++;
+        }
+        else
+        {
+            _lineas.Add(new LineaCompra
+            {
+                ProductoId = producto.ProductoId,
+                Producto = producto.Nombre,
+                Cantidad = 1,
+                // Punto de partida: el precio de venta; el personal ingresa el costo real de la compra.
+                PrecioUnitario = producto.Precio
+            });
+        }
+
+        _resultados.Clear();
+        _busqueda = string.Empty;
+    }
+
+    private async Task Registrar()
+    {
+        _error = null;
+
+        if (_proveedorId == 0)
+        {
+            _error = "Elija el proveedor.";
+        }
+        else if (_lineas.Count == 0)
+        {
+            _error = "Agregue al menos un producto.";
+        }
+        else if (_lineas.Any(l => l.Cantidad < 1 || l.PrecioUnitario <= 0))
+        {
+            _error = "Cada producto necesita una cantidad de al menos 1 y un costo mayor a cero.";
+        }
+
+        if (_error != null)
+        {
+            return;
+        }
+
+        _guardando = true;
+
+        try
+        {
+            await Tienda.RegistrarCompraAsync(_proveedorId, _lineas);
+            Notificaciones.Exito("Entrada registrada: el stock fue actualizado.");
+            Navegacion.NavigateTo("admin/compras", replace: true);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+}

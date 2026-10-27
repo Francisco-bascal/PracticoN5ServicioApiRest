@@ -1,0 +1,100 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@inject SesionService Sesion
+@inject ServidorApi Servidor
+@inject NavigationManager Navegacion
+
+<div class="pagina pagina-angosta">
+    <div class="marca">
+        <div class="marca-icono">🛍️</div>
+        <h1>Tienda Móvil</h1>
+        <p class="suave">Ingrese para ver el catálogo y comprar.</p>
+    </div>
+
+    @if (_aviso != null)
+    {
+        <Alerta Tipo="aviso">@_aviso</Alerta>
+    }
+
+    <EditForm Model="_formulario" OnValidSubmit="Ingresar">
+        <DataAnnotationsValidator />
+
+        <div class="campo">
+            <label for="usuario">Usuario</label>
+            <InputText id="usuario" @bind-Value="_formulario.NombreUsuario" autocomplete="username" autocapitalize="none" />
+            <ValidationMessage For="() => _formulario.NombreUsuario" />
+        </div>
+
+        <div class="campo">
+            <label for="password">Contraseña</label>
+            <InputText id="password" type="password" @bind-Value="_formulario.Password" autocomplete="current-password" />
+            <ValidationMessage For="() => _formulario.Password" />
+        </div>
+
+        @if (_error != null)
+        {
+            <Alerta Tipo="error">@_error</Alerta>
+        }
+
+        <button class="btn btn-primario btn-bloque" type="submit" disabled="@_enviando">
+            @(_enviando ? "Ingresando..." : "Ingresar")
+        </button>
+    </EditForm>
+
+    <p class="centrado" style="margin-top:16px">¿No tiene cuenta? <a href="registro">Regístrese</a></p>
+    <p class="centrado pequeno suave"><a href="servidor">⚙️ Servidor: @_servidor</a></p>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Retorno { get; set; }
+
+    private readonly FormularioLogin _formulario = new();
+    private string? _aviso;
+    private string? _error;
+    private string _servidor = string.Empty;
+    private bool _enviando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _aviso = Sesion.AvisoPendiente;
+        Sesion.AvisoPendiente = null;
+        _servidor = await Servidor.ObtenerUrlAsync();
+
+        await Sesion.AsegurarRestauradaAsync();
+        if (Sesion.EstaAutenticado)
+        {
+            Navegacion.NavigateTo(Destino(), replace: true);
+        }
+    }
+
+    private async Task Ingresar()
+    {
+        _enviando = true;
+        _error = null;
+
+        try
+        {
+            await Sesion.IniciarSesionAsync(_formulario.NombreUsuario, _formulario.Password);
+            Navegacion.NavigateTo(Destino(), replace: true);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _enviando = false;
+        }
+    }
+
+    // Solo se acepta un destino interno: evita que un enlace manipulado redirija a otro sitio.
+    private string Destino()
+    {
+        bool valido = !string.IsNullOrWhiteSpace(Retorno)
+            && !Retorno.Contains("://")
+            && !Retorno.StartsWith("//")
+            && !Retorno.StartsWith("login");
+
+        return valido ? Retorno! : "";
+    }
+}

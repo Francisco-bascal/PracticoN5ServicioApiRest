@@ -1,0 +1,114 @@
+@page "/admin/auditoria"
+@attribute [Authorize(Roles = Roles.Administrador)]
+@inject TiendaApi Tienda
+
+<div class="pagina">
+    <h1>Auditoría</h1>
+    <p class="suave">Quién hizo qué y cuándo: altas, cambios, bajas, anulaciones, inicios de sesión y reportes.</p>
+
+    <div class="fila-campos">
+        <div class="campo">
+            <label for="desde">Desde</label>
+            <input id="desde" type="date" @bind="_desde" @bind:format="yyyy-MM-dd" />
+        </div>
+        <div class="campo">
+            <label for="hasta">Hasta</label>
+            <input id="hasta" type="date" @bind="_hasta" @bind:format="yyyy-MM-dd" />
+        </div>
+    </div>
+    <div class="fila-campos">
+        <div class="campo">
+            <label for="usuario">Usuario</label>
+            <input id="usuario" autocapitalize="none" placeholder="Todos" @bind="_usuario" />
+        </div>
+        <div class="campo">
+            <label for="entidad">Recurso</label>
+            <select id="entidad" @bind="_entidad">
+                <option value="">Todos</option>
+                @foreach (var entidad in Entidades)
+                {
+                    <option value="@entidad">@entidad</option>
+                }
+            </select>
+        </div>
+    </div>
+    <button class="btn btn-primario btn-bloque" @onclick="Filtrar">Filtrar</button>
+
+    @if (_error != null)
+    {
+        <Alerta Tipo="error">@_error</Alerta>
+    }
+    else if (_pagina == null)
+    {
+        <Cargando />
+    }
+    else if (_pagina.Elementos.Count == 0)
+    {
+        <div class="vacio"><div class="vacio-icono">🕵️</div><p>No hay registros para esos filtros.</p></div>
+    }
+    else
+    {
+        <p class="pequeno suave" style="margin-top:14px">@_pagina.TotalElementos registros</p>
+
+        @foreach (var registro in _pagina.Elementos)
+        {
+            <div class="fila" style="align-items:flex-start">
+                <div class="fila-cuerpo">
+                    <div class="fila-titulo">@registro.Usuario · @registro.Accion</div>
+                    <div class="fila-detalle">@Formato.FechaHora(registro.Fecha) · @registro.Entidad@(registro.EntidadId != null ? $" #{registro.EntidadId}" : "")</div>
+                    @if (!string.IsNullOrWhiteSpace(registro.Detalle))
+                    {
+                        <div class="fila-detalle">@registro.Detalle</div>
+                    }
+                </div>
+                <span class="etiqueta @ClaseCodigo(registro.CodigoRespuesta)">@registro.CodigoRespuesta</span>
+            </div>
+        }
+
+        <Paginador Pagina="_numero" TotalPaginas="_pagina.TotalPaginas" PaginaCambiada="IrAPagina" />
+    }
+</div>
+
+@code {
+    private static readonly string[] Entidades =
+        { "Usuarios", "Productos", "Categorias", "Proveedores", "Clientes", "Compras", "Ventas", "Reportes", "Logs" };
+
+    private Pagina<RegistroAuditoria>? _pagina;
+    private DateTime? _desde;
+    private DateTime? _hasta;
+    private string _usuario = string.Empty;
+    private string _entidad = string.Empty;
+    private int _numero = 1;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Cargar();
+
+    private Task Filtrar() => IrAPagina(1);
+
+    private Task IrAPagina(int numero)
+    {
+        _numero = numero;
+        return Cargar();
+    }
+
+    private static string ClaseCodigo(int codigo) => codigo switch
+    {
+        >= 500 => "etiqueta-peligro",
+        >= 400 => "etiqueta-aviso",
+        _ => "etiqueta-ok"
+    };
+
+    private async Task Cargar()
+    {
+        _error = null;
+
+        try
+        {
+            _pagina = await Tienda.ObtenerAuditoriaAsync(_desde, _hasta, _usuario, _entidad, _numero);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

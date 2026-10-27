@@ -1,0 +1,16 @@
+@if (TotalPaginas > 1)
+{
+    <nav class="paginador" aria-label="Paginación">
+        <button class="btn btn-secundario" disabled="@(Pagina <= 1)" @onclick="() => Ir(Pagina - 1)">‹ Anterior</button>
+        <span class="paginador-estado">Página @Pagina de @TotalPaginas</span>
+        <button class="btn btn-secundario" disabled="@(Pagina >= TotalPaginas)" @onclick="() => Ir(Pagina + 1)">Siguiente ›</button>
+    </nav>
+}
+
+@code {
+    [Parameter] public int Pagina { get; set; } = 1;
+    [Parameter] public int TotalPaginas { get; set; }
+    [Parameter] public EventCallback<int> PaginaCambiada { get; set; }
+
+    private Task Ir(int pagina) => PaginaCambiada.InvokeAsync(pagina);
+}

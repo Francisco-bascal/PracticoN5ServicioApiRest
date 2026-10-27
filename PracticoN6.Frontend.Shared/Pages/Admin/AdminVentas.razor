@@ -1,0 +1,95 @@
+@page "/admin/ventas"
+@attribute [Authorize(Roles = Roles.Personal)]
+@inject TiendaApi Tienda
+@inject SesionService Sesion
+@inject NotificacionesService Notificaciones
+
+<div class="pagina">
+    <h1>Ventas</h1>
+    <p class="suave">Las ventas se registran desde el carrito. Para una venta de mostrador, arme el carrito y elija el cliente al pagar.</p>
+
+    @if (_error != null)
+    {
+        <Alerta Tipo="error">@_error</Alerta>
+    }
+    else if (_pagina == null)
+    {
+        <Cargando />
+    }
+    else if (_pagina.Elementos.Count == 0)
+    {
+        <div class="vacio"><div class="vacio-icono">🧾</div><p>Todavía no hay ventas.</p></div>
+    }
+    else
+    {
+        @foreach (var venta in _pagina.Elementos)
+        {
+            <div class="fila @(venta.Anulada ? "fila-anulada" : "")" style="align-items:flex-start">
+                <a class="fila-cuerpo" href="pedidos/@venta.VentaId" style="color:inherit;text-decoration:none">
+                    <div class="fila-titulo">Venta N° @venta.VentaId @if (venta.Anulada){<span class="etiqueta etiqueta-peligro">Anulada</span>}</div>
+                    <div class="fila-detalle">@Formato.FechaHora(venta.Fecha) · @venta.Cliente?.NombreCompleto</div>
+                    <div class="fila-detalle">@string.Join(", ", venta.Detalles.Select(d => $"{d.Cantidad} × {d.Producto?.Nombre}"))</div>
+                </a>
+                <div class="fila-derecha">
+                    <div class="fila-titulo">@Formato.Dinero(venta.Total)</div>
+                    @if (Sesion.EsAdministrador && !venta.Anulada)
+                    {
+                        <button class="btn btn-enlace" style="color:var(--peligro)" @onclick="() => _porAnular = venta">Anular</button>
+                    }
+                </div>
+            </div>
+        }
+
+        <Paginador Pagina="_numero" TotalPaginas="_pagina.TotalPaginas" PaginaCambiada="IrAPagina" />
+    }
+</div>
+
+<DialogoConfirmacion Visible="_porAnular != null" Titulo="Anular venta" Peligro="true" TextoConfirmar="Anular"
+                     Mensaje="@($"¿Anular la venta N° {_porAnular?.VentaId}? El stock vendido volverá al inventario.")"
+                     Confirmado="Anular" Cancelado="() => _porAnular = null" />
+
+@code {
+    private Pagina<Venta>? _pagina;
+    private Venta? _porAnular;
+    private int _numero = 1;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Cargar();
+
+    private Task IrAPagina(int numero)
+    {
+        _numero = numero;
+        return Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        _error = null;
+
+        try
+        {
+            _pagina = await Tienda.ObtenerVentasAsync(_numero);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task Anular()
+    {
+        var venta = _porAnular!;
+        _porAnular = null;
+
+        try
+        {
+            await Tienda.AnularVentaAsync(venta.VentaId);
+            Notificaciones.Exito($"Venta N° {venta.VentaId} anulada.");
+            await Cargar();
+        }
+        catch (ApiException ex)
+        {
+            Notificaciones.Error(ex.Message);
+        }
+    }
+}

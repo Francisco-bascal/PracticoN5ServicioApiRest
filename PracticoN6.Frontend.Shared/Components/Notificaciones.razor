@@ -1,0 +1,31 @@
+@implements IDisposable
+@inject NotificacionesService Servicio
+
+<div class="notificaciones" aria-live="polite">
+    @foreach (var n in _lista)
+    {
+        <div class="notificacion notificacion-@n.Tipo">@n.Texto</div>
+    }
+</div>
+
+@code {
+    private readonly List<Notificacion> _lista = new();
+
+    protected override void OnInitialized() => Servicio.Nueva += AlLlegar;
+
+    private void AlLlegar(Notificacion notificacion)
+    {
+        InvokeAsync(async () =>
+        {
+            _lista.Add(notificacion);
+            StateHasChanged();
+
+            await Task.Delay(3500);
+
+            _lista.Remove(notificacion);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose() => Servicio.Nueva -= AlLlegar;
+}

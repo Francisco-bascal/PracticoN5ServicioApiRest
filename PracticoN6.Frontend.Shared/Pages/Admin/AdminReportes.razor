@@ -1,0 +1,129 @@
+@page "/admin/reportes"
+@attribute [Authorize(Roles = Roles.Personal)]
+@inject TiendaApi Tienda
+@inject IGestorArchivos Archivos
+@inject NotificacionesService Notificaciones
+
+<div class="pagina">
+    <h1>Reportes PDF</h1>
+    <p class="suave">Genere un reporte para verlo, guardarlo o enviarlo por correo.</p>
+
+    <div class="campo">
+        <label for="tipo">Reporte</label>
+        <select id="tipo" @bind="_tipo">
+            <option value="stock">Stock actual (inventario valorizado)</option>
+            <option value="entradas">Entradas de mercadería (compras)</option>
+            <option value="salidas">Salidas de mercadería (ventas)</option>
+            <option value="movimientos">Movimientos de stock</option>
+        </select>
+    </div>
+
+    @if (UsaPeriodo)
+    {
+        <div class="fila-campos">
+            <div class="campo">
+                <label for="desde">Desde</label>
+                <input id="desde" type="date" @bind="_desde" @bind:format="yyyy-MM-dd" />
+            </div>
+            <div class="campo">
+                <label for="hasta">Hasta</label>
+                <input id="hasta" type="date" @bind="_hasta" @bind:format="yyyy-MM-dd" />
+            </div>
+        </div>
+    }
+
+    <div class="acciones">
+        <button class="btn btn-primario" disabled="@_ocupado" @onclick="Ver">@(_ocupado == "ver" ? "Generando..." : "📄 Ver / guardar PDF")</button>
+    </div>
+
+    <h2>Enviar por correo</h2>
+    <div class="campo">
+        <label for="correo">Destinatario</label>
+        <input id="correo" type="email" inputmode="email" autocapitalize="none" placeholder="correo@ejemplo.com" @bind="_correo" />
+    </div>
+    <button class="btn btn-secundario btn-bloque" disabled="@(_ocupado != null)" @onclick="Enviar">@(_ocupado == "enviar" ? "Enviando..." : "✉️ Enviar reporte")</button>
+
+    @if (_resultado != null)
+    {
+        <Alerta Tipo="@(_resultado.Enviado ? "exito" : "aviso")">@_resultado.Mensaje</Alerta>
+    }
+
+    @if (_error != null)
+    {
+        <Alerta Tipo="error">@_error</Alerta>
+    }
+</div>
+
+@code {
+    private string _tipo = "stock";
+    private DateTime? _desde = DateTime.Today.AddDays(-30);
+    private DateTime? _hasta = DateTime.Today;
+    private string _correo = string.Empty;
+    private string? _ocupado;
+    private string? _error;
+    private ResultadoEnvio? _resultado;
+
+    private bool UsaPeriodo => _tipo != "stock";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // El correo de la propia cuenta es el destinatario más habitual.
+            _correo = (await Tienda.ObtenerPerfilAsync()).Email;
+        }
+        catch (ApiException)
+        {
+            // Sin sugerencia: el usuario lo escribe.
+        }
+    }
+
+    private async Task Ver()
+    {
+        _ocupado = "ver";
+        _error = null;
+        _resultado = null;
+
+        try
+        {
+            byte[] pdf = await Tienda.ObtenerReporteAsync(_tipo, UsaPeriodo ? _desde : null, UsaPeriodo ? _hasta : null);
+            await Archivos.GuardarYCompartirAsync($"reporte-{_tipo}-{DateTime.Today:yyyyMMdd}.pdf", pdf, "application/pdf");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _ocupado = null;
+        }
+    }
+
+    private async Task Enviar()
+    {
+        _error = null;
+        _resultado = null;
+
+        if (string.IsNullOrWhiteSpace(_correo))
+        {
+            _error = "Ingrese el correo del destinatario.";
+            return;
+        }
+
+        _ocupado = "enviar";
+
+        try
+        {
+            _resultado = await Tienda.EnviarReporteAsync(_tipo, _correo.Trim(), UsaPeriodo ? _desde : null, UsaPeriodo ? _hasta : null);
+            Notificaciones.Mostrar(_resultado.Enviado ? "Reporte enviado." : "El correo no se envió (ver detalle).", _resultado.Enviado ? "exito" : "info");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _ocupado = null;
+        }
+    }
+}
