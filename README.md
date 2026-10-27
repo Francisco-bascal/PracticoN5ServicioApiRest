@@ -77,7 +77,8 @@ PracticoN5ServicioApiRest.sln
 │   ├── Models/  DTOs/  Data/           entidades, contratos, DbContext e inicializador
 │   ├── Infraestructura/                filtro de auditoría y middleware de errores
 │   ├── Migrations/                     migraciones EF Core (la nueva: Tp6BlazorHybrid)
-│   └── appsettings.example.json        plantilla de configuración
+│   ├── appsettings.Development.json   configuración de desarrollo lista para usar (SQLite)
+│   └── appsettings.example.json        plantilla para SQL Server (copiar como appsettings.Local.json)
 ├── PracticoN5ServicioApiRest.Tests/    167 pruebas de integración de la API
 ├── PracticoN6.Frontend.Shared/         UI y lógica del frontend (Razor Class Library)
 ├── PracticoN6.Frontend.Shared.Tests/   67 pruebas unitarias del frontend
@@ -92,36 +93,35 @@ PracticoN5ServicioApiRest.sln
 
 ### Requisitos
 
-- **.NET 8 SDK** y **Visual Studio 2022 (17.8 o superior)** con las cargas de trabajo *ASP.NET y desarrollo web* y *Desarrollo de la interfaz de usuario de aplicaciones multiplataforma con .NET (MAUI)*, que incluye el SDK y el emulador de Android.
-- **SQL Server** (por ejemplo LocalDB, que viene con Visual Studio). Opcional: hay un modo de demostración con SQLite.
+- **.NET 8 SDK** y **Visual Studio 2022 (17.8 o superior)** con la carga de trabajo *ASP.NET y desarrollo web*.
+- Para la app en Android, además *Desarrollo de la interfaz de usuario de aplicaciones multiplataforma con .NET (MAUI)*, que incluye el SDK y el emulador de Android.
+- **No hace falta instalar SQL Server para probarlo**: en desarrollo la API usa por defecto una base SQLite local. Para SQL Server, ver más abajo.
+
+### Inicio rápido (ver la app en el navegador, sin emulador)
+
+1. Abra `PracticoN5ServicioApiRest.sln` en Visual Studio.
+2. En la barra superior, elija el perfil de inicio **«API + Web (navegador)»** (viene en `PracticoN5ServicioApiRest.slnLaunch`; requiere VS 17.11 o superior). Si no aparece: clic derecho en la solución → *Configurar proyectos de inicio* → *Varios proyectos de inicio* → **Iniciar** en `PracticoN5ServicioApiRest` y en `PracticoN6.Frontend.Web`.
+3. Presione **F5**. Se abren Swagger (`http://localhost:5276/swagger`) y la tienda (`http://localhost:5190`).
+4. Ingrese con un [usuario de ejemplo](#usuarios-de-ejemplo), por ejemplo `cliente` / `Demo1234`.
+
+Si no se abre nada, mire la ventana **Salida** / **Consola** de la API: ahí aparece el motivo (por ejemplo, un puerto ocupado). Por línea de comandos es equivalente a `dotnet run --project PracticoN5ServicioApiRest` y `dotnet run --project PracticoN6.Frontend.Web` en dos terminales.
 
 ### 1. La API
 
 ```bash
 cd PracticoN5ServicioApiRest
-cp appsettings.example.json appsettings.Development.json    # en Windows: copy
-# editar ConnectionStrings:DefaultConnection y Jwt:Key
-dotnet run --launch-profile http
+dotnet run --launch-profile http        # http://localhost:5276/swagger
 ```
 
-Al arrancar, la API aplica las migraciones pendientes, crea el **administrador inicial** y, si `Seed:DatosDemo` es `true`, carga un catálogo y usuarios de ejemplo. Swagger queda en `http://localhost:5276/swagger`.
+La configuración de desarrollo viene lista en `appsettings.Development.json` (base SQLite `tienda.db`, clave JWT de desarrollo, administrador inicial y datos de ejemplo). Al arrancar, la API crea las tablas, el **administrador inicial** y, si `Seed:DatosDemo` es `true`, un catálogo y usuarios de ejemplo.
 
-> `appsettings.*.json` está en el `.gitignore` (contiene secretos): por eso se versiona solo la plantilla `appsettings.example.json`.
+**Usar SQL Server en lugar de SQLite:** copie `appsettings.example.json` como `appsettings.Local.json`, edite `ConnectionStrings:DefaultConnection` y ejecute de nuevo. Ese archivo **no se versiona** (es para sus datos personales: contraseñas, servidor) y pisa lo de `appsettings.Development.json`. Con SQL Server la API aplica las migraciones al arrancar (`Database:AplicarMigraciones`).
+
+> No ponga secretos reales en `appsettings.Development.json`, que sí se versiona. En producción use `appsettings.Local.json`, variables de entorno o secretos de usuario (la clave JWT y la contraseña del administrador deben ser propias).
 
 Migraciones a mano: el repositorio incluye `dotnet-tools.json` con `dotnet-ef` 10; con el SDK 8 instale la herramienta compatible (`dotnet tool install --global dotnet-ef --version 8.0.30`) y use `dotnet-ef database update`.
 
-**Modo demostración sin SQL Server (SQLite)** — útil para probar la app rápidamente:
-
-```powershell
-# PowerShell (Windows)
-$env:Database__Proveedor = "Sqlite"; $env:Database__CrearEsquema = "true"
-$env:ConnectionStrings__DefaultConnection = "Data Source=tienda.db"
-$env:Jwt__Key = "una-clave-de-desarrollo-de-mas-de-32-caracteres"; $env:Jwt__Issuer = "MiWebApi"
-$env:Seed__AdminPassword = "Admin1234"; $env:Seed__DatosDemo = "true"
-dotnet run --launch-profile http
-```
-
-En bash, anteponga las mismas variables al comando (`Database__Proveedor=Sqlite … dotnet run`). SQLite es solo para demostración y pruebas; el proveedor real del proyecto es SQL Server.
+SQLite es para desarrollo y pruebas; el proveedor real del proyecto es SQL Server (la migración `Tp6BlazorHybrid` está pensada para él).
 
 ### 2. La app en Android
 
@@ -293,7 +293,7 @@ Los listados paginados devuelven `{ paginaActual, tamanoPagina, totalElementos, 
 
 ## Configuración
 
-Ver `PracticoN5ServicioApiRest/appsettings.example.json`.
+Valores de desarrollo en `appsettings.Development.json`; referencia completa de claves (con SQL Server) en `appsettings.example.json`; los datos personales van en `appsettings.Local.json` (no se versiona).
 
 | Clave | Para qué |
 |---|---|
@@ -364,6 +364,6 @@ El TP se desarrolla en **grupos de 2 alumnos** con **repositorio Git**.
 - La imagen de cada producto se sirve sin redimensionar; para un catálogo grande convendría generar miniaturas.
 - Las pantallas de administración están pensadas para teléfono; en tablet o PC funcionan pero sin un diseño de escritorio.
 - CORS permisivo (origen libre) heredado del TP 5: como la autenticación usa un header (no cookies) no hay riesgo de CSRF, pero en producción conviene limitarlo a los orígenes conocidos.
-- Los secretos de `appsettings` no deben versionarse; en producción usar *user secrets* o variables de entorno.
+- `appsettings.Development.json` trae una clave JWT y contraseñas de ejemplo solo para desarrollo: en producción deben reemplazarse (la API se niega a arrancar sin `Jwt:Key`, y ignora los datos de ejemplo en `Production`).
 
 **Licencias:** los PDF se generan con [QuestPDF](https://www.questpdf.com) bajo su licencia *Community* (gratuita para uso educativo, individuos y empresas pequeñas); el envío de correo usa MailKit.

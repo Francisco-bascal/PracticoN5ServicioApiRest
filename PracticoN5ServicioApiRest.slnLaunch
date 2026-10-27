@@ -1,0 +1,27 @@
+[
+  {
+    "Name": "API + Web (navegador)",
+    "Projects": [
+      {
+        "Path": "PracticoN5ServicioApiRest\\PracticoN5ServicioApiRest.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
+      },
+      {
+        "Path": "PracticoN6.Frontend.Web\\PracticoN6.Frontend.Web.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
+      }
+    ]
+  },
+  {
+    "Name": "Solo API",
+    "Projects": [
+      {
+        "Path": "PracticoN5ServicioApiRest\\PracticoN5ServicioApiRest.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
+      }
+    ]
+  }
+]

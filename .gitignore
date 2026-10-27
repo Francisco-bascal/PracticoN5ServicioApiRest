@@ -372,3 +372,10 @@ App_Data/
 # Imágenes subidas por los usuarios en tiempo de ejecución (se conserva solo la de ejemplo)
 PracticoN5ServicioApiRest/wwwroot/Uploads/*
 !PracticoN5ServicioApiRest/wwwroot/Uploads/3060.webp
+
+# La configuración de desarrollo (sin secretos) SÍ se versiona; la personal de cada integrante, no.
+!PracticoN5ServicioApiRest/appsettings.Development.json
+appsettings.Local.json
+*.db
+*.db-shm
+*.db-wal

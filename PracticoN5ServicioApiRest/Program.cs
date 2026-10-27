@@ -14,6 +14,9 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configuración personal de cada integrante (por ejemplo, la conexión a su SQL Server). No se versiona: ver appsettings.example.json.
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 // Add services to the container.
 
 // IgnoreCycles evita errores de serialización JSON por referencias circulares entre navegaciones.
@@ -57,7 +60,16 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new Exception("Database connection not found");
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException(
+        "Falta ConnectionStrings:DefaultConnection. En desarrollo viene en appsettings.Development.json; " +
+        "en otros entornos (o para usar SQL Server) configúrela en appsettings.Local.json, variables de entorno o secretos de usuario.");
+
+string? claveJwt = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(claveJwt) || claveJwt.Length < 32)
+{
+    throw new InvalidOperationException("Falta Jwt:Key o es demasiado corta (se necesitan al menos 32 caracteres).");
+}
 // SQL Server es el proveedor real. "Sqlite" (Database:Proveedor) es solo para probar la app sin instalar SQL Server:
 // usa un archivo local y crea las tablas directamente (Database:CrearEsquema), sin pasar por las migraciones.
 bool usarSqlite = string.Equals(builder.Configuration["Database:Proveedor"], "Sqlite", StringComparison.OrdinalIgnoreCase);
