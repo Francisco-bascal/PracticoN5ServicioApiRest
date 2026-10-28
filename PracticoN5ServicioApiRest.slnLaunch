@@ -6,6 +6,11 @@
         "Path": "PracticoN5ServicioApiRest\\PracticoN5ServicioApiRest.csproj",
         "Action": "Start",
         "DebugTarget": "http"
+      },
+      {
+        "Path": "PracticoN6.Frontend.Maui\\PracticoN6.Frontend.Maui.csproj",
+        "Action": "Start",
+        "DebugTarget": "Motorola moto g13 (Android 14.0 - API 34)"
       }
     ]
   },

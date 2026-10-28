@@ -9,7 +9,10 @@ public static class MauiProgram
 {
     // Dirección de la API en desarrollo. En el emulador de Android, 10.0.2.2 es la computadora que lo aloja
     // (localhost sería el propio emulador). Desde la app se puede cambiar en la pantalla "Servidor".
-    private const string UrlApiEmuladorAndroid = "http://10.0.2.2:5276";
+
+    private static readonly string UrlApiDesarrollo = DeviceInfo.DeviceType == DeviceType.Virtual
+        ? "http://10.0.2.2:5276"   // emulador: 10.0.2.2 es la PC anfitriona
+        : "http://localhost:5276"; // teléfono físico con "adb reverse"
 
     public static MauiApp CreateMauiApp()
     {
@@ -25,7 +28,7 @@ public static class MauiProgram
 #endif
 
         // Interfaz y lógica de la tienda (proyecto compartido).
-        builder.Services.AddTiendaShared(opciones => opciones.UrlApiPorDefecto = UrlApiEmuladorAndroid);
+        builder.Services.AddTiendaShared(opciones => opciones.UrlApiPorDefecto = UrlApiDesarrollo);
 
         // Lo que depende del dispositivo.
         builder.Services.AddSingleton<IAlmacenamientoSeguro, AlmacenamientoSeguroMaui>();
